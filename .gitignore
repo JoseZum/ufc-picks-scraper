@@ -1,0 +1,20 @@
+venv/
+# Ignore Python cache files in tapology_scraper and its spiders subfolder
+/tapology_scraper/__pycache__/
+/tapology_scraper/spiders/__pycache__/
+# General Python cache
+*.pyc
+*.pyo
+*.pyd
+# Ignore environment files
+.env/
+
+sample-tapology-scraper/
+ejemplo1.html
+ejemplo2.html
+ejemplo3.html
+
+.github/
+.vscode/
+
+.env
