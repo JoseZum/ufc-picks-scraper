@@ -22,7 +22,7 @@ class UfcFightersSpider(scrapy.Spider):
     allowed_domains = ["tapology.com"]
 
     custom_settings = {
-        "DOWNLOAD_DELAY": 2.0,  # Be respectful, fighter pages have more data
+        "DOWNLOAD_DELAY": 2.0, 
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
         "ROBOTSTXT_OBEY": False,
         "FEED_EXPORT_ENCODING": "utf-8",
@@ -43,7 +43,6 @@ class UfcFightersSpider(scrapy.Spider):
         self.target_event_id = EVENT_ID
         self.limit = int(LIMIT) if LIMIT else None
 
-        # MongoDB connection
         mongo_uri = os.getenv("MONGODB_URI")
 
         if not mongo_uri:
@@ -116,7 +115,6 @@ class UfcFightersSpider(scrapy.Spider):
                     tapology_id = fighter.get("tapology_id")
                     fighter_name = fighter.get("fighter_name", "Unknown")
 
-                    # Skip if no URL or already processed
                     if not tapology_url or not tapology_id:
                         self.logger.warning(f"Bout {bout_id} {corner} fighter has no tapology_url")
                         continue
@@ -124,7 +122,6 @@ class UfcFightersSpider(scrapy.Spider):
                     if tapology_id in seen_fighter_ids:
                         continue
 
-                    # Check if fighter needs update
                     needs_update = (
                         fighter.get("nationality") == "Unknown" or
                         fighter.get("age_at_fight_years") == 0 or
