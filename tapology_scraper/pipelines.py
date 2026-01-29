@@ -149,7 +149,7 @@ class MongoDBPipeline:
         spider.logger.info(f"Saved bout: {bout_id} - Event {event_id}")
 
     async def process_bout_detail(self, item, spider):
-        """Update bout with detailed information"""
+        """Insert or update bout details in separate collection"""
 
         bout_id = item.get("bout_id")
         event_id = item.get("event_id")
@@ -166,55 +166,48 @@ class MongoDBPipeline:
             self.logger.error(f"Invalid IDs - bout_id: {bout_id}, event_id: {event_id}")
             return
 
-        # Prepare update document with detailed info
-        update_doc = {
+        # Prepare bout_details document
+        bout_detail_doc = {
+            "bout_id": bout_id,
+            "event_id": event_id,
             "bout_date": item.get("bout_date"),
             "broadcast": item.get("broadcast"),
             "weight_info": item.get("weight_info"),
-            "updated_at": datetime.utcnow().isoformat(),
+            "scraped_at": datetime.utcnow().isoformat(),
         }
 
-        # Update fighters with detailed comparison data
+        # Add fighters with detailed comparison data
         fighters = item.get("fighters", {})
         if fighters:
-            update_doc["fighters"] = {
-                "red": self._prepare_fighter_data(fighters.get("red", {})),
-                "blue": self._prepare_fighter_data(fighters.get("blue", {}))
+            bout_detail_doc["fighters"] = {
+                "red": self._prepare_fighter_detail_data(fighters.get("red", {})),
+                "blue": self._prepare_fighter_detail_data(fighters.get("blue", {}))
             }
 
-        # Update result if available
+        # Add result if available
         if item.get("result"):
-            update_doc["result"] = item["result"]
-            # Also update status if result is present
-            if item["result"].get("winner"):
-                update_doc["status"] = "completed"
+            bout_detail_doc["result"] = item["result"]
 
         # Remove None values
-        update_doc = {k: v for k, v in update_doc.items() if v is not None}
+        bout_detail_doc = {k: v for k, v in bout_detail_doc.items() if v is not None}
 
-        # Update bout
-        result = await self.db.bouts.update_one(
-            {"id": bout_id},
-            {"$set": update_doc}
+        # Upsert to bout_details collection
+        await self.db.bout_details.update_one(
+            {"bout_id": bout_id},
+            {"$set": bout_detail_doc},
+            upsert=True
         )
 
-        if result.modified_count > 0:
-            spider.logger.info(f"Updated bout details: {bout_id}")
-        else:
-            spider.logger.warning(f"No bout found to update: {bout_id}")
+        spider.logger.info(f"Saved bout details: {bout_id}")
 
     def _prepare_fighter_data(self, fighter_data):
-        """Prepare fighter data, removing None values and ensuring consistency"""
+        """Prepare basic fighter data for bouts collection"""
 
         if not fighter_data:
             return {
                 "fighter_name": None,
                 "tapology_id": None,
                 "tapology_url": None,
-                "nationality": "Unknown",
-                "age_at_fight_years": 0,
-                "height_cm": None,
-                "reach_cm": None
             }
 
         # Use 'name' or 'fighter_name'
@@ -224,9 +217,50 @@ class MongoDBPipeline:
             "fighter_name": name,
             "tapology_id": fighter_data.get("tapology_id"),
             "tapology_url": fighter_data.get("tapology_url"),
+        }
+
+        # Remove None values
+        return {k: v for k, v in prepared.items() if v is not None}
+
+    def _prepare_fighter_detail_data(self, fighter_data):
+        """Prepare detailed fighter data for bout_details collection"""
+
+        if not fighter_data:
+            return {
+                "fighter_name": None,
+                "tapology_id": None,
+            }
+
+        # Use 'name' or 'fighter_name'
+        name = fighter_data.get("name") or fighter_data.get("fighter_name")
+
+        # Clean nationality and fighting_out_of from HTML artifacts
+        nationality = fighter_data.get("nationality", "Unknown")
+        if nationality and isinstance(nationality, str):
+            # Remove common HTML artifacts and extra whitespace
+            nationality = nationality.replace("\n", " ").strip()
+            # Try to extract just the country name (usually repeated twice)
+            parts = [p.strip() for p in nationality.split() if p.strip()]
+            if len(parts) >= 2 and parts[0] == parts[1]:
+                nationality = parts[0]
+            elif "Unknown" not in nationality and len(parts) > 0:
+                # Take the first meaningful word
+                nationality = parts[0] if parts[0] not in ["Nation", "Fights"] else (parts[1] if len(parts) > 1 else "Unknown")
+
+        fighting_out_of = fighter_data.get("fighting_out_of")
+        if fighting_out_of and isinstance(fighting_out_of, str):
+            # Clean up fighting_out_of
+            fighting_out_of = fighting_out_of.replace("\n", " ").replace("Fights out of", "").strip()
+            # Remove excessive whitespace
+            fighting_out_of = " ".join(fighting_out_of.split())
+
+        prepared = {
+            "fighter_name": name,
+            "tapology_id": fighter_data.get("tapology_id"),
+            "tapology_url": fighter_data.get("tapology_url"),
             "nickname": fighter_data.get("nickname"),
-            "nationality": fighter_data.get("nationality", "Unknown"),
-            "fighting_out_of": fighter_data.get("fighting_out_of"),
+            "nationality": nationality,
+            "fighting_out_of": fighting_out_of,
             "age_at_fight_years": fighter_data.get("age_at_fight", {}).get("years", 0) if isinstance(fighter_data.get("age_at_fight"), dict) else 0,
             "age_at_fight": fighter_data.get("age_at_fight"),
             "height_cm": fighter_data.get("height", {}).get("cm") if isinstance(fighter_data.get("height"), dict) else None,
