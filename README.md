@@ -1,82 +1,82 @@
 # UFC Scraper
 
-Este scraper extrae datos de peleas de UFC desde Tapology.com y los almacena en MongoDB.
+This scraper extracts UFC fight data from Tapology.com and stores it in MongoDB.
 
-## Características
+## Features
 
-- Scrapea eventos de UFC (nombre, fecha, ubicación, etc.)
-- Extrae información detallada de peleas (peleadores, peso, categoría, etc.)
-- Ingresa a páginas individuales de peleas para extraer datos comparativos:
-  - Rankings UFC
-  - Records en la pelea
-  - Últimas 5 peleas
+- Scrapes UFC events (name, date, location, etc.)
+- Extracts detailed fight information (fighters, weight, category, etc.)
+- Accesses individual fight pages to extract comparative data:
+  - UFC Rankings
+  - Fight records
+  - Last 5 fights
   - Betting odds
-  - Nacionalidad
+  - Nationality
   - Fighting out of
-  - Edad en la pelea
-  - Peso, altura, reach
-  - Gimnasios
+  - Age at the fight
+  - Weight, height, reach
+  - Gyms
 
-## Instalación Local
+## Local Installation
 
-1. Instalar dependencias:
+1. Install dependencies:
 ```bash
 cd scraper
 pip install -r requirements.txt
 ```
 
-2. Configurar variables de entorno:
-Crear un archivo `.env` en el directorio `scraper/` con:
+2. Configure environment variables:
+Create a `.env` file in the `scraper/` directory with:
 ```
-MONGODB_URI=tu_conexion_mongodb_aqui
+MONGODB_URI=your_mongodb_connection_here
 ```
 
-## Uso
+## Usage
 
-### Modo descubrimiento (scraper automático de eventos futuros)
+### Discovery Mode (automatic scraper for upcoming events)
 ```bash
 cd scraper
 python -m scrapy crawl ufc
 ```
 
-### Scraper de un evento específico
+### Scraper for a specific event
 ```bash
 python -m scrapy crawl ufc -a EVENT_ID=136026
 ```
 
-### Scraper de resultados de un evento
+### Scraper for event results
 ```bash
 python -m scrapy crawl ufc -a EVENT_ID=136026 -a MODE=results
 ```
 
-### Sin scrapear detalles de peleas (más rápido)
+### Skip fight details scraping (faster)
 ```bash
 python -m scrapy crawl ufc -a SKIP_BOUT_DETAILS=true
 ```
 
 ## GitHub Actions
 
-El scraper se ejecuta automáticamente cada día a las 00:00 UTC mediante GitHub Actions.
+The scraper runs automatically every day at 00:00 UTC via GitHub Actions.
 
-### Configurar secretos en GitHub:
+### Configure secrets in GitHub:
 
-1. Ve a tu repositorio en GitHub
+1. Go to your repository on GitHub
 2. Settings → Secrets and variables → Actions
-3. Click en "New repository secret"
-4. Añadir:
+3. Click "New repository secret"
+4. Add:
    - Name: `MONGODB_URI`
-   - Secret: Tu URI de conexión a MongoDB
+   - Secret: Your MongoDB connection URI
 
-### Ejecución manual:
+### Manual Execution:
 
-1. Ve a la pestaña "Actions" en GitHub
-2. Selecciona "UFC Scraper Workflow"
-3. Click en "Run workflow"
-4. Opcional: especifica un EVENT_ID o MODE
+1. Go to the "Actions" tab on GitHub
+2. Select "UFC Scraper Workflow"
+3. Click "Run workflow"
+4. Optional: specify an EVENT_ID or MODE
 
-## Estructura de Datos en MongoDB
+## MongoDB Data Structure
 
-### Colección: `events`
+### Collection: `events`
 ```json
 {
   "id": 136026,
@@ -86,7 +86,7 @@ El scraper se ejecuta automáticamente cada día a las 00:00 UTC mediante GitHub
 }
 ```
 
-### Colección: `bouts`
+### Collection: `bouts`
 ```json
 {
   "id": 1074233,
@@ -105,8 +105,8 @@ El scraper se ejecuta automáticamente cada día a las 00:00 UTC mediante GitHub
 }
 ```
 
-## Notas
+## Notes
 
-- El scraper respeta robots.txt y usa delays entre requests
-- Los eventos anteriores a 2026-01-01 son ignorados automáticamente
-- Después de 10 eventos antiguos consecutivos, el scraper detiene la paginación
+- The scraper respects robots.txt and uses delays between requests
+- Events prior to 2026-01-01 are automatically ignored
+- After 10 consecutive old events, the scraper stops pagination

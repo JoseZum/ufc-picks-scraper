@@ -14,10 +14,17 @@ ejemplo1.html
 ejemplo2.html
 ejemplo3.html
 
-.github/
+
 .vscode/
 
 .env
 
 raw.jsonl
 scraper_output.log
+docs_verificacion/
+raw_test.jsonl
+fighter_images_test.log
+test_scrapers_local.py
+.env.example
+
+__pycache__/

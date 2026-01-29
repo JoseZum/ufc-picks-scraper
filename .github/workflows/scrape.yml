@@ -1,0 +1,118 @@
+name: UFC Scraper
+
+on:
+  schedule:
+    # Scraping de resultados: Cada 2 horas durante eventos (sábados y domingos)
+    - cron: "0 */2 * * 6,7"      # Reducido de 30 min a 2 horas, solo fines de semana
+
+    # Descubrimiento de eventos: 2 veces por semana (lunes y jueves)
+    - cron: "0 2 * * 1,4"         # Aumentado de 1 vez a 2 veces/semana
+
+    # Backfill de imágenes (proxy): Diario
+    - cron: "0 3 * * *"           # Sin cambios
+
+    # Subida de imágenes a S3: Diario (NUEVO)
+    - cron: "0 4 * * *"           # Nuevo job
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options:
+          - scheduled
+          - discover
+          - images
+          - fighter_images
+        default: scheduled
+
+jobs:
+  scheduled:
+    name: Scheduled Results
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 */2 * * 6,7') ||
+      github.event.inputs.mode == 'scheduled'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+        working-directory: scraper
+      - run: python scheduler.py
+        working-directory: scraper
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+  discover:
+    name: Discover Events
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1,4') ||
+      github.event.inputs.mode == 'discover'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+        working-directory: scraper
+      - run: scrapy crawl ufc -o raw.jsonl
+        working-directory: scraper
+      - run: python ingest.py
+        working-directory: scraper
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+  images:
+    name: Backfill Images (Proxy)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
+      github.event.inputs.mode == 'images'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+        working-directory: scraper
+      - run: scrapy crawl ufc_images
+        working-directory: scraper
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+  fighter-images:
+    name: Upload Fighter Images to S3
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
+      github.event.inputs.mode == 'fighter_images'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+        working-directory: scraper
+
+      # Ejecutar spider con límite para evitar saturación
+      - name: Run fighter images spider
+        run: scrapy crawl fighter_images -a LIMIT=100
+        working-directory: scraper
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: us-east-1
+          IMAGE_SOURCE_MODE: s3
+          JWT_SECRET: dummy-secret-for-scraping
+          GOOGLE_CLIENT_ID: dummy-client-id-for-scraping
+
+      # Log resultados
+      - name: Summary
+        if: always()
+        run: |
+          echo "✅ Fighter images spider completed"
+          echo "Check logs above for details on uploaded images"
