@@ -3,7 +3,7 @@ name: UFC Scraper
 on:
   schedule:
     # Scraping de resultados: Cada 2 horas durante eventos (sábados y domingos)
-    - cron: "0 */2 * * 6,7"      # Reducido de 30 min a 2 horas, solo fines de semana
+    - cron: "0 */2 * * 0,6"      # Reducido de 30 min a 2 horas, solo fines de semana (0=domingo, 6=sábado)
 
     # Descubrimiento de eventos: 2 veces por semana (lunes y jueves)
     - cron: "0 2 * * 1,4"         # Aumentado de 1 vez a 2 veces/semana
@@ -30,7 +30,7 @@ jobs:
     name: Scheduled Results
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 */2 * * 6,7') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 */2 * * 0,6') ||
       github.event.inputs.mode == 'scheduled'
     steps:
       - uses: actions/checkout@v4
