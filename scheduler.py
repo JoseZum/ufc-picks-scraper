@@ -1,10 +1,16 @@
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient
 import subprocess
 import pytz
 
-MONGO_URI = os.environ["MONGODB_URI"]
+MONGO_URI = os.environ.get("MONGODB_URI", "")
+if not MONGO_URI:
+    print("ERROR: MONGODB_URI environment variable is not set or empty.")
+    print("Please configure the MONGODB_URI secret in your GitHub repository settings.")
+    sys.exit(1)
+
 client = MongoClient(MONGO_URI)
 db = client.ufc_picks
 
