@@ -14,9 +14,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Config
-MONGO_URI = os.environ.get("MONGO_URI")
+MONGO_URI = os.environ.get("MONGODB_URI")
 if not MONGO_URI:
-    raise ValueError("MONGO_URI environment variable not set")
+    raise ValueError("MONGODB_URI environment variable not set")
 
 DB_NAME = "ufc_picks"  
 MIN_DATE = date(2026, 1, 1)  
