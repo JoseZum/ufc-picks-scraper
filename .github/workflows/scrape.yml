@@ -71,7 +71,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: scrapy crawl ufc_images
+      - name: Run UFC images spider
+        run: scrapy crawl ufc_images
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
