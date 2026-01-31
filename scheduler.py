@@ -4,7 +4,7 @@ from pymongo import MongoClient
 import subprocess
 import pytz
 
-MONGO_URI = os.environ["MONGO_URI"]
+MONGO_URI = os.environ["MONGODB_URI"]
 client = MongoClient(MONGO_URI)
 db = client.ufc_picks
 
