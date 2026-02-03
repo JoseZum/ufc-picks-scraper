@@ -27,4 +27,11 @@ fighter_images_test.log
 test_scrapers_local.py
 .env.example
 
+# Ignorar archivos de prueba
+/test_bout_details.json
+/test_discovery.json
+/test_output.json
+/test_ufc_only.json
+/test_scrapers_local.py
+
 __pycache__/

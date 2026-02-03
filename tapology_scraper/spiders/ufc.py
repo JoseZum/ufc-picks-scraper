@@ -60,14 +60,23 @@ class UfcSpider(scrapy.Spider):
         event_url = response.url
         event_id = self._extract_id(r"/events/(\d+)-", event_url)
 
+        # Obtener nombre del evento primero para filtrar
+        name = response.css("h1::text").get() or response.css("h2.text-center::text").get()
+        name = name.strip() if name else ""
+
+        # FILTRAR: Solo procesar eventos de UFC
+        if not self._is_ufc_event(name, event_url):
+            self.logger.debug(f"Skipping non-UFC event: {name}")
+            return
+
         # Usar selectores deterministas para detalles del evento
         details_list = response.css('ul[data-controller="unordered-list-background"] li')
-        
+
         event_data = {}
         for li in details_list:
             label = li.css('span.font-bold::text').get()
             value = li.css('span.text-neutral-700::text').get()
-            
+
             if label and value:
                 label = label.strip().rstrip(':')
                 value = value.strip()
@@ -104,8 +113,8 @@ class UfcSpider(scrapy.Spider):
         except ValueError:
             pass  # Si no podemos parsear la fecha, continuar
 
-        name = response.css("h1::text").get() or response.css("h2.text-center::text").get()
-        
+        # name ya fue obtenido al inicio del método
+
         total_bouts = event_data.get('MMA Bouts')
         if total_bouts and total_bouts.isdigit():
             total_bouts = int(total_bouts)
@@ -661,6 +670,31 @@ class UfcSpider(scrapy.Spider):
         return gym_info
 
     # Helpers
+
+    def _is_ufc_event(self, name: str, url: str) -> bool:
+        """
+        Verifica si un evento es de UFC basándose en el nombre y URL.
+
+        Returns:
+            True si es un evento de UFC, False en caso contrario
+        """
+        name_lower = name.lower() if name else ""
+        url_lower = url.lower() if url else ""
+
+        # Patrones que identifican eventos de UFC
+        ufc_patterns = [
+            "ufc ",
+            "ufc-",
+            "-ufc-",
+            "ultimate fighting championship",
+        ]
+
+        # Verificar si el nombre o URL contiene patrones de UFC
+        for pattern in ufc_patterns:
+            if pattern in name_lower or pattern in url_lower:
+                return True
+
+        return False
 
     def _extract_id(self, pattern, text):
         m = re.search(pattern, text)
