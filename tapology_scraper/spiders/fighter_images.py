@@ -398,17 +398,9 @@ class FighterImagesPipeline:
             )
 
         # Importar y configurar servicio S3
-        # La importación está aquí en vez de arriba porque solo se necesita
-        # si efectivamente vamos a procesar items
+        # Usar el servicio S3 local del scraper (autónomo, no depende del backend)
         try:
-            import sys
-            import pathlib
-
-            # Agregar el path del backend al sys.path para importar el servicio
-            backend_path = pathlib.Path(__file__).parent.parent.parent.parent / "backend"
-            sys.path.insert(0, str(backend_path))
-
-            from app.services.s3_service import get_s3_service
+            from tapology_scraper.s3_service import get_s3_service
 
             self.s3_service = get_s3_service()
 
@@ -421,8 +413,8 @@ class FighterImagesPipeline:
 
         except ImportError as e:
             raise RuntimeError(
-                f"No se pudo importar el servicio S3 del backend: {e}. "
-                "Asegúrate de que el backend esté en la estructura esperada."
+                f"No se pudo importar el servicio S3: {e}. "
+                "Verifica que boto3 esté instalado."
             )
 
     async def process_item(self, item, spider):

@@ -106,5 +106,5 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "✅ Fighter images spider completed"
+          echo "Fighter images spider completed"
           echo "Check logs above for details on uploaded images"
