@@ -77,6 +77,7 @@ class MongoDBPipeline:
             "location": item.get("location"),
             "total_bouts": item.get("total_bouts"),
             "tapology_url": item.get("tapology_url"),
+            "poster_image_url": item.get("poster_image_url"),
             "scraped_at": datetime.utcnow().isoformat(),
         }
 
