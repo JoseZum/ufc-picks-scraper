@@ -56,7 +56,7 @@ class FighterImagesSpider(scrapy.Spider):
         }
     }
 
-    def __init__(self, EVENT_ID=None, LIMIT=None, FIGHTER_ID=None, *args, **kwargs):
+    def __init__(self, EVENT_ID=None, LIMIT=None, FIGHTER_ID=None, FORCE=None, *args, **kwargs):
         """
         Inicializar spider con parámetros opcionales
 
@@ -64,11 +64,13 @@ class FighterImagesSpider(scrapy.Spider):
             EVENT_ID: Filtrar solo peleadores de un evento específico
             LIMIT: Limitar cantidad de peleadores a procesar
             FIGHTER_ID: Procesar solo un peleador específico
+            FORCE: Re-download all images even if they already exist (for quality upgrades)
         """
         super(FighterImagesSpider, self).__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
         self.target_fighter_id = FIGHTER_ID
         self.limit = int(LIMIT) if LIMIT else None
+        self.force_redownload = FORCE and FORCE.lower() in ('true', '1', 'yes')
 
         # Conectar a MongoDB
         mongo_uri = os.getenv("MONGODB_URI")
@@ -86,6 +88,8 @@ class FighterImagesSpider(scrapy.Spider):
             self.logger.info(f"📌 Processing single fighter: {self.target_fighter_id}")
         if self.limit:
             self.logger.info(f"📌 Limit: {self.limit} fighters")
+        if self.force_redownload:
+            self.logger.info(f"🔄 FORCE mode: Re-downloading all images for quality upgrade")
 
     async def start(self):
         """
@@ -111,16 +115,20 @@ class FighterImagesSpider(scrapy.Spider):
         Yields:
             scrapy.Request para cada peleador único sin imagen
         """
-        # Construir query para encontrar fighters sin imagen
-        # Buscamos donde image_key no existe o es None en red o blue corner
-        query = {
-            "$or": [
-                {"fighters.red.image_key": None},
-                {"fighters.red.image_key": {"$exists": False}},
-                {"fighters.blue.image_key": None},
-                {"fighters.blue.image_key": {"$exists": False}},
-            ]
-        }
+        # Construir query para encontrar fighters
+        if self.force_redownload:
+            # FORCE mode: get all bouts to re-download all images
+            query = {}
+        else:
+            # Normal mode: only fighters without images
+            query = {
+                "$or": [
+                    {"fighters.red.image_key": None},
+                    {"fighters.red.image_key": {"$exists": False}},
+                    {"fighters.blue.image_key": None},
+                    {"fighters.blue.image_key": {"$exists": False}},
+                ]
+            }
 
         # Aplicar filtros opcionales
         if self.target_event_id:
@@ -129,7 +137,8 @@ class FighterImagesSpider(scrapy.Spider):
         try:
             # Obtener todos los bouts que coincidan
             bouts = await self.db.bouts.find(query).to_list(length=None)
-            self.logger.info(f"📊 Found {len(bouts)} bouts with fighters missing images")
+            mode_str = "FORCE re-download" if self.force_redownload else "missing images"
+            self.logger.info(f"📊 Found {len(bouts)} bouts ({mode_str})")
 
             # Trackear fighters únicos para evitar duplicados
             # Usamos tapology_id como identificador único
@@ -171,8 +180,8 @@ class FighterImagesSpider(scrapy.Spider):
 
                     # Verificar si realmente necesita imagen
                     image_key = fighter.get("image_key")
-                    if image_key:
-                        # Ya tiene imagen, skip
+                    if image_key and not self.force_redownload:
+                        # Ya tiene imagen y no estamos en modo FORCE, skip
                         continue
 
                     # Agregar a la lista de vistos
@@ -300,6 +309,15 @@ class FighterImagesSpider(scrapy.Spider):
         elif not image_url.startswith('http'):
             # URL relativa sin / inicial
             image_url = f"https://images.tapology.com/{image_url}"
+
+        # Upgrade to large size for better quality
+        # Tapology URL structure: /headshot_images/{id}/{size}/filename.ext
+        # Available sizes: icon, thumb, small, medium, large
+        for small_size in ['/icon/', '/thumb/', '/small/', '/medium/', '/default/']:
+            if small_size in image_url:
+                image_url = image_url.replace(small_size, '/large/')
+                self.logger.info(f"📐 Upgraded image from {small_size} to /large/")
+                break
 
         return {
             "type": "fighter_image",
