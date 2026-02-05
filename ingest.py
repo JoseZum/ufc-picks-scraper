@@ -38,6 +38,7 @@ stats = {
     "bouts_processed": 0,
     "bouts_inserted": 0,
     "bouts_updated": 0,
+    "bouts_deleted": 0,
     "bout_details_processed": 0,
     "skipped_non_ufc": 0,
     "skipped_old": 0,
@@ -360,15 +361,28 @@ def process_event(item: dict) -> bool:
         stats["events_inserted"] += 1
         print(f"  Inserted event: {item.get('name')}")
         return True
-    elif existing.get("status") == "scheduled":
+    else:
+        # Always update name and poster_image_url, even if event has finished
+        # This ensures event information stays in sync with Tapology
+        update_fields = {
+            "name": event_doc["name"],
+            "last_updated": now,
+        }
+
+        # Update poster if it exists in scraped data
+        if event_doc.get("poster_image_url"):
+            update_fields["poster_image_url"] = event_doc["poster_image_url"]
+
+        # If event is still scheduled, update all fields
+        if existing.get("status") == "scheduled":
+            update_fields = {k: v for k, v in event_doc.items() if k != "_id"}
+
         events_col.update_one(
             {"_id": event_id},
-            {"$set": {k: v for k, v in event_doc.items() if k != "_id"}}
+            {"$set": update_fields}
         )
         stats["events_updated"] += 1
         return True
-
-    return False
 
 
 def process_bout(item: dict, valid_event_ids: set) -> bool:
@@ -400,6 +414,32 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
     return False
 
 
+def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
+    """
+    Remove bouts from database that are no longer in Tapology for this event.
+
+    Args:
+        event_id: The event ID to check
+        scraped_bout_ids: Set of bout IDs that were scraped from Tapology
+    """
+    # Find all bouts in DB for this event
+    db_bouts = list(bouts_col.find({"event_id": event_id}))
+    db_bout_ids = {bout["_id"] for bout in db_bouts}
+
+    # Find bouts that are in DB but not in Tapology anymore
+    deleted_bout_ids = db_bout_ids - scraped_bout_ids
+
+    if deleted_bout_ids:
+        print(f"  Deleting {len(deleted_bout_ids)} bouts no longer in Tapology for event {event_id}:")
+        for bout_id in deleted_bout_ids:
+            bout = next((b for b in db_bouts if b["_id"] == bout_id), None)
+            if bout:
+                fighter_names = f"{bout['fighters']['red']['fighter_name']} vs {bout['fighters']['blue']['fighter_name']}"
+                print(f"    - Bout {bout_id}: {fighter_names}")
+                bouts_col.delete_one({"_id": bout_id})
+                stats["bouts_deleted"] += 1
+
+
 def main():
     print(f"Starting UFC data ingestion...")
     print(f"Database: {DB_NAME}")
@@ -407,6 +447,8 @@ def main():
     print()
 
     valid_event_ids = set()
+    # Track scraped bouts per event for cleanup
+    scraped_bouts_by_event = {}
 
     # 1. First pass: Cache bout_detail items for fighter enrichment
     print("Caching bout details for fighter data...")
@@ -449,13 +491,27 @@ def main():
                 item = json.loads(line)
                 if item.get("type") == "bout":
                     bout_id = int(item["bout_id"])
+                    event_id = int(item["event_id"])
+
                     if bout_id not in seen_bout_ids:
                         seen_bout_ids.add(bout_id)
+
+                        # Track scraped bouts per event
+                        if event_id not in scraped_bouts_by_event:
+                            scraped_bouts_by_event[event_id] = set()
+                        scraped_bouts_by_event[event_id].add(bout_id)
+
                         process_bout(item, valid_event_ids)
             except json.JSONDecodeError:
                 continue
             except Exception as e:
                 print(f"  Error processing bout: {e}")
+
+    # 4. Clean up deleted bouts for each event
+    print("\nCleaning up deleted bouts...")
+    for event_id in valid_event_ids:
+        scraped_bout_ids = scraped_bouts_by_event.get(event_id, set())
+        cleanup_deleted_bouts(event_id, scraped_bout_ids)
 
     print("\nUpdating main event references...")
     for event_id in valid_event_ids:
@@ -481,6 +537,7 @@ def main():
     print(f"Bouts processed: {stats['bouts_processed']}")
     print(f"  - Inserted: {stats['bouts_inserted']}")
     print(f"  - Updated: {stats['bouts_updated']}")
+    print(f"  - Deleted (no longer in Tapology): {stats['bouts_deleted']}")
     print(f"  - Enriched with fighter details: {min(stats['bout_details_processed'], stats['bouts_processed'])}")
 
 
