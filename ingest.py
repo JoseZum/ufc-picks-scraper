@@ -38,9 +38,13 @@ stats = {
     "bouts_processed": 0,
     "bouts_inserted": 0,
     "bouts_updated": 0,
+    "bout_details_processed": 0,
     "skipped_non_ufc": 0,
     "skipped_old": 0,
 }
+
+# Store bout_detail data keyed by bout_id for enriching bouts
+bout_details_cache = {}
 
 
 def is_ufc_event(event_data: dict) -> bool:
@@ -145,7 +149,47 @@ def transform_event(item: dict) -> dict:
     }
 
 
-def transform_fighter(fighter_data: dict, corner: str) -> dict:
+def parse_record(record_str: str) -> dict:
+    """Parse record string like '23-5-0' or '23-5' into dict."""
+    if not record_str:
+        return {"wins": 0, "losses": 0, "draws": 0}
+
+    parts = record_str.replace(" ", "").split("-")
+    if len(parts) >= 2:
+        return {
+            "wins": int(parts[0]) if parts[0].isdigit() else 0,
+            "losses": int(parts[1]) if parts[1].isdigit() else 0,
+            "draws": int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0,
+        }
+    return {"wins": 0, "losses": 0, "draws": 0}
+
+
+def parse_height_to_cm(height_str: str) -> int | None:
+    """Convert height like 5'10\" or 5'10 to centimeters."""
+    if not height_str:
+        return None
+
+    match = re.search(r"(\d+)'(\d+)", height_str)
+    if match:
+        feet = int(match.group(1))
+        inches = int(match.group(2))
+        return int((feet * 30.48) + (inches * 2.54))
+    return None
+
+
+def parse_reach_to_cm(reach_str: str) -> int | None:
+    """Convert reach like 72\" or 72 to centimeters."""
+    if not reach_str:
+        return None
+
+    match = re.search(r"(\d+)", reach_str)
+    if match:
+        inches = int(match.group(1))
+        return int(inches * 2.54)
+    return None
+
+
+def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None) -> dict:
     if not fighter_data:
         return {
             "fighter_name": "TBD",
@@ -160,13 +204,14 @@ def transform_fighter(fighter_data: dict, corner: str) -> dict:
             "reach_cm": None,
         }
 
-    return {
+    # Base data from bout
+    fighter = {
         "fighter_name": fighter_data.get("name", "TBD"),
         "corner": corner,
-        "nationality": "Unknown",  
-        "record_at_fight": {"wins": 0, "losses": 0, "draws": 0},  
-        "last_fights": [],  
-        "fighting_out_of": None,  
+        "nationality": "Unknown",
+        "record_at_fight": {"wins": 0, "losses": 0, "draws": 0},
+        "last_fights": [],
+        "fighting_out_of": None,
         "ranking": None,
         "age_at_fight_years": 0,
         "height_cm": None,
@@ -175,17 +220,92 @@ def transform_fighter(fighter_data: dict, corner: str) -> dict:
         "tapology_url": fighter_data.get("tapology_url"),
     }
 
+    # Enrich with bout_detail data if available
+    if bout_detail:
+        # bout_detail has structure: fighters.red and fighters.blue
+        fighters_data = bout_detail.get("fighters", {})
+        fighter_detail = fighters_data.get(corner, {})
+
+        if fighter_detail:
+            # Nationality (string)
+            if fighter_detail.get("nationality"):
+                fighter["nationality"] = fighter_detail["nationality"]
+
+            # Record at fight (object with wins, losses, draws)
+            if fighter_detail.get("record_at_fight"):
+                record = fighter_detail["record_at_fight"]
+                if isinstance(record, dict):
+                    fighter["record_at_fight"] = {
+                        "wins": record.get("wins", 0),
+                        "losses": record.get("losses", 0),
+                        "draws": record.get("draws", 0)
+                    }
+
+            # Age at fight (object with years, months, days)
+            if fighter_detail.get("age_at_fight"):
+                age_data = fighter_detail["age_at_fight"]
+                if isinstance(age_data, dict) and "years" in age_data:
+                    fighter["age_at_fight_years"] = age_data["years"]
+
+            # Height (object with cm)
+            if fighter_detail.get("height"):
+                height_data = fighter_detail["height"]
+                if isinstance(height_data, dict) and "cm" in height_data:
+                    fighter["height_cm"] = height_data["cm"]
+
+            # Reach (object with cm)
+            if fighter_detail.get("reach"):
+                reach_data = fighter_detail["reach"]
+                if isinstance(reach_data, dict) and "cm" in reach_data:
+                    fighter["reach_cm"] = reach_data["cm"]
+
+            # UFC Ranking (object with position and division)
+            if fighter_detail.get("ufc_ranking"):
+                ranking_data = fighter_detail["ufc_ranking"]
+                if isinstance(ranking_data, dict):
+                    fighter["ranking"] = ranking_data.get("position")
+                    fighter["ranking_division"] = ranking_data.get("division")
+
+            # Title status (Champion/Challenger)
+            if fighter_detail.get("title_status"):
+                fighter["title_status"] = fighter_detail["title_status"]
+
+            # Fighting out of
+            if fighter_detail.get("fighting_out_of"):
+                fighter["fighting_out_of"] = fighter_detail["fighting_out_of"]
+
+            # Last 5 fights (array of W/L)
+            if fighter_detail.get("last_5_fights"):
+                fighter["last_fights"] = fighter_detail["last_5_fights"]
+
+            # Gym info
+            if fighter_detail.get("gym"):
+                gym_data = fighter_detail["gym"]
+                if isinstance(gym_data, dict):
+                    fighter["gym"] = gym_data.get("primary")
+
+            # Betting odds
+            if fighter_detail.get("betting_odds"):
+                fighter["betting_odds"] = fighter_detail["betting_odds"]
+
+    return fighter
+
 
 def transform_bout(item: dict) -> dict:
+    bout_id = int(item["bout_id"])
     fighters = item.get("fighters", {})
-    red_fighter = transform_fighter(fighters.get("red"), "red")
-    blue_fighter = transform_fighter(fighters.get("blue"), "blue")
+
+    # Get bout_detail data if available
+    bout_detail = bout_details_cache.get(bout_id)
+
+    red_fighter = transform_fighter(fighters.get("red"), "red", bout_detail)
+    blue_fighter = transform_fighter(fighters.get("blue"), "blue", bout_detail)
     weight_class = item.get("weight_class") or ""
     gender = "female" if "women" in weight_class.lower() or "strawweight" in weight_class.lower() else "male"
 
     return {
-        "_id": int(item["bout_id"]),
-        "id": int(item["bout_id"]),
+        "_id": bout_id,
+        "id": bout_id,
         "event_id": int(item["event_id"]),
         "source": "tapology",
         "url": item.get("tapology_url"),
@@ -207,6 +327,14 @@ def transform_bout(item: dict) -> dict:
         "scraped_at": now,
         "last_updated": now,
     }
+
+
+def process_bout_detail(item: dict):
+    """Cache bout_detail data for later use when processing bouts."""
+    bout_id = item.get("bout_id")
+    if bout_id:
+        bout_details_cache[int(bout_id)] = item
+        stats["bout_details_processed"] += 1
 
 
 def process_event(item: dict) -> bool:
@@ -280,8 +408,23 @@ def main():
 
     valid_event_ids = set()
 
-    # 1. Procesar eventos
-    print("Processing events...")
+    # 1. First pass: Cache bout_detail items for fighter enrichment
+    print("Caching bout details for fighter data...")
+    with open("raw.jsonl", "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                item = json.loads(line)
+                if item.get("type") == "bout_detail":
+                    process_bout_detail(item)
+            except json.JSONDecodeError:
+                continue
+            except Exception as e:
+                print(f"  Error caching bout_detail: {e}")
+
+    print(f"Cached {stats['bout_details_processed']} bout details")
+
+    # 2. Procesar eventos
+    print("\nProcessing events...")
     with open("raw.jsonl", "r", encoding="utf-8") as f:
         for line in f:
             try:
@@ -296,9 +439,9 @@ def main():
 
     print(f"\nValid UFC event IDs: {len(valid_event_ids)}")
 
-    # 2. Procesar peleas
+    # 3. Procesar peleas (now enriched with bout_detail data)
     print("\nProcessing bouts...")
-    seen_bout_ids = set()  
+    seen_bout_ids = set()
 
     with open("raw.jsonl", "r", encoding="utf-8") as f:
         for line in f:
@@ -329,6 +472,7 @@ def main():
     print("\n" + "="*50)
     print("INGESTION COMPLETE")
     print("="*50)
+    print(f"Bout details cached: {stats['bout_details_processed']}")
     print(f"Events processed: {stats['events_processed']}")
     print(f"  - Inserted: {stats['events_inserted']}")
     print(f"  - Updated: {stats['events_updated']}")
@@ -337,6 +481,7 @@ def main():
     print(f"Bouts processed: {stats['bouts_processed']}")
     print(f"  - Inserted: {stats['bouts_inserted']}")
     print(f"  - Updated: {stats['bouts_updated']}")
+    print(f"  - Enriched with fighter details: {min(stats['bout_details_processed'], stats['bouts_processed'])}")
 
 
 if __name__ == "__main__":
