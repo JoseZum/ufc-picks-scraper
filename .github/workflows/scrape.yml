@@ -48,6 +48,8 @@ jobs:
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 1,4') ||
       github.event.inputs.mode == 'discover'
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -56,8 +58,6 @@ jobs:
       - run: pip install -r requirements.txt
       - run: scrapy crawl ufc -o raw.jsonl
       - run: python ingest.py
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
   images:
     name: Backfill Images (Proxy)
