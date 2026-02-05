@@ -264,8 +264,8 @@ def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None)
             if fighter_detail.get("ufc_ranking"):
                 ranking_data = fighter_detail["ufc_ranking"]
                 if isinstance(ranking_data, dict):
-                    fighter["ranking"] = ranking_data.get("position")
-                    fighter["ranking_division"] = ranking_data.get("division")
+                    # Keep ranking as dict for Pydantic validation
+                    fighter["ranking"] = ranking_data
 
             # Title status (Champion/Challenger)
             if fighter_detail.get("title_status"):
@@ -283,7 +283,8 @@ def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None)
             if fighter_detail.get("gym"):
                 gym_data = fighter_detail["gym"]
                 if isinstance(gym_data, dict):
-                    fighter["gym"] = gym_data.get("primary")
+                    # Keep gym as dict for frontend
+                    fighter["gym"] = gym_data
 
             # Betting odds
             if fighter_detail.get("betting_odds"):
