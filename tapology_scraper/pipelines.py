@@ -235,25 +235,14 @@ class MongoDBPipeline:
         # Use 'name' or 'fighter_name'
         name = fighter_data.get("name") or fighter_data.get("fighter_name")
 
-        # Clean nationality and fighting_out_of from HTML artifacts
+        # Clean nationality and fighting_out_of
         nationality = fighter_data.get("nationality", "Unknown")
         if nationality and isinstance(nationality, str):
-            # Remove common HTML artifacts and extra whitespace
-            nationality = nationality.replace("\n", " ").strip()
-            # Try to extract just the country name (usually repeated twice)
-            parts = [p.strip() for p in nationality.split() if p.strip()]
-            if len(parts) >= 2 and parts[0] == parts[1]:
-                nationality = parts[0]
-            elif "Unknown" not in nationality and len(parts) > 0:
-                # Take the first meaningful word
-                nationality = parts[0] if parts[0] not in ["Nation", "Fights"] else (parts[1] if len(parts) > 1 else "Unknown")
+            nationality = nationality.strip()
 
         fighting_out_of = fighter_data.get("fighting_out_of")
         if fighting_out_of and isinstance(fighting_out_of, str):
-            # Clean up fighting_out_of
-            fighting_out_of = fighting_out_of.replace("\n", " ").replace("Fights out of", "").strip()
-            # Remove excessive whitespace
-            fighting_out_of = " ".join(fighting_out_of.split())
+            fighting_out_of = fighting_out_of.strip()
 
         prepared = {
             "fighter_name": name,

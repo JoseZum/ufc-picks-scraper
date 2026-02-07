@@ -291,11 +291,16 @@ class UfcSpider(scrapy.Spider):
                 yield response.follow(
                     bout_href,
                     self.parse_bout,
-                    cb_kwargs={"event_id": event_id, "bout_id": bout_id}
+                    cb_kwargs={
+                        "event_id": event_id,
+                        "bout_id": bout_id,
+                        "red_fighter": red_fighter,
+                        "blue_fighter": blue_fighter
+                    }
                 )
 
     # Detalle de la pelea
-    def parse_bout(self, response, event_id, bout_id):
+    def parse_bout(self, response, event_id, bout_id, red_fighter=None, blue_fighter=None):
         # Extraer detalles estructurados de la pelea desde la lista
         details_list = response.css('ul[data-controller="unordered-list-background"] li')
 
@@ -324,44 +329,29 @@ class UfcSpider(scrapy.Spider):
         broadcast = bout_data.get('Broadcast')
         weight_info = bout_data.get('Weight')
 
-        # Extract fighter details with IDs (deduplicar por fighter_id)
-        fighter_links = response.css('a[href*="/fighters/"]')
-        fighters_data = []
-        seen_fighter_ids = set()
+        # Use fighters passed from parse_event (avoids the broad CSS selector bug)
+        if red_fighter is None:
+            red_fighter = {"name": None, "tapology_id": None, "tapology_url": None}
+        else:
+            red_fighter = dict(red_fighter)  # Copy to avoid mutating original
 
-        for link in fighter_links:
-            if len(fighters_data) >= 2:  # Solo necesitamos 2 peleadores
-                break
-            href = link.css("::attr(href)").get()
-            name = link.css("::text").get()
-            if href and name:
-                fighter_id = self._extract_id(r"/fighters/([^-]+)", href)
-                if fighter_id and fighter_id not in seen_fighter_ids:
-                    seen_fighter_ids.add(fighter_id)
-                    fighters_data.append({
-                        "tapology_id": fighter_id,
-                        "tapology_url": response.urljoin(href),
-                        "name": name.strip()
-                    })
+        if blue_fighter is None:
+            blue_fighter = {"name": None, "tapology_id": None, "tapology_url": None}
+        else:
+            blue_fighter = dict(blue_fighter)  # Copy to avoid mutating original
 
-        # Extraer nicknames
+        # Extraer nicknames - filter out ad div IDs and HTML artifacts
         all_text = " ".join(response.css("body ::text").getall())
-        nicknames = re.findall(r'"([^"]+)"', all_text)
-
-        red_fighter = fighters_data[0] if len(fighters_data) > 0 else {"name": None, "tapology_id": None, "tapology_url": None}
-        blue_fighter = fighters_data[1] if len(fighters_data) > 1 else {"name": None, "tapology_id": None, "tapology_url": None}
+        all_quoted = re.findall(r'"([^"]+)"', all_text)
+        nicknames = [q for q in all_quoted if not q.startswith("tapology_") and len(q) < 40 and "\n" not in q and "(" not in q]
 
         if len(nicknames) > 0:
             red_fighter["nickname"] = nicknames[0]
         if len(nicknames) > 1:
             blue_fighter["nickname"] = nicknames[1]
 
-        # ===== NUEVA SECCION: Extraer información comparativa detallada de ambos peleadores =====
-
-        # La página de la pelea muestra una comparación lado a lado de los peleadores
-        # Necesitamos extraer: rankings, records, últimas peleas, odds, nacionalidad, etc.
-
-        # Extraer información comparativa en formato de tabla
+        # ===== Extraer información comparativa detallada de ambos peleadores =====
+        # Uses table-based extraction for record, age, and other stats
         comparison_data = self._extract_fighter_comparison(response)
 
         # Fusionar datos comparativos con los fighters
@@ -449,231 +439,180 @@ class UfcSpider(scrapy.Spider):
 
     def _extract_fighter_comparison(self, response):
         """
-        Extrae información comparativa detallada de ambos peleadores desde la página de la pelea.
+        Extrae información comparativa de ambos peleadores desde la tabla de comparación.
 
-        La página muestra una comparación lado a lado con información como:
-        - Rankings UFC
-        - Records en la pelea
-        - Últimas 5 peleas
-        - Betting odds
-        - Nacionalidad
-        - Fighting out of
-        - Edad en la pelea
-        - Peso más reciente
-        - Altura
-        - Reach
-        - Gym
-
-        Returns:
-            dict: {"left": {...}, "right": {...}} con datos del peleador izquierdo y derecho
+        Tapology's comparison table has variable columns (5-7 per row).
+        Strategy: find the category label in the row text, then extract
+        left value from first cell and right value from last cell.
         """
         comparison = {"left": {}, "right": {}}
 
         try:
-            # Obtener todo el texto de la página para análisis
-            page_text = " ".join(response.css("body ::text").getall())
+            # The comparison table is the first table on the bout page
+            tables = response.css("table")
+            if not tables:
+                return comparison
 
-            # 1. EXTRAER RANKINGS UFC
-            # Buscar patrones como "#1 UFC Featherweight" o "#4 UFC Featherweight"
-            ranking_pattern = r'#\s*(\d+)\s+UFC\s+([\w\s]+)'
-            rankings = re.findall(ranking_pattern, page_text)
+            table = tables[0]
+            rows = table.css("tr")
 
-            if len(rankings) >= 2:
-                # Primero es izquierdo (red), segundo es derecho (blue)
-                comparison["left"]["ufc_ranking"] = {
-                    "position": int(rankings[0][0]),
-                    "division": rankings[0][1].strip()
-                }
-                comparison["right"]["ufc_ranking"] = {
-                    "position": int(rankings[1][0]),
-                    "division": rankings[1][1].strip()
-                }
-            elif len(rankings) == 1:
-                comparison["left"]["ufc_ranking"] = {
-                    "position": int(rankings[0][0]),
-                    "division": rankings[0][1].strip()
-                }
+            for row in rows:
+                cells = row.css("td")
+                if len(cells) < 3:
+                    continue
 
-            # 2. EXTRAER RECORDS EN LA PELEA (Pro Record At Fight)
-            # Buscar patrones como "27-4-0        Pro Record At Fight        27-7-0"
-            record_pattern = r'(\d+)-(\d+)-(\d+)\s+Pro Record At Fight\s+(\d+)-(\d+)-(\d+)'
-            record_match = re.search(record_pattern, page_text)
+                # Get all cell texts
+                cell_texts = []
+                for cell in cells:
+                    text = " ".join(cell.css("::text").getall()).strip()
+                    cell_texts.append(text)
 
-            if record_match:
-                comparison["left"]["record_at_fight"] = {
-                    "wins": int(record_match.group(1)),
-                    "losses": int(record_match.group(2)),
-                    "draws": int(record_match.group(3))
-                }
-                comparison["right"]["record_at_fight"] = {
-                    "wins": int(record_match.group(4)),
-                    "losses": int(record_match.group(5)),
-                    "draws": int(record_match.group(6))
-                }
+                # Find category by joining middle cells
+                row_text = " ".join(cell_texts)
+                left_val = cell_texts[0]
+                right_val = cell_texts[-1]
 
-            # 3. EXTRAER ÚLTIMAS 5 PELEAS
-            # Buscar secuencias de W/L seguidas de años
-            last5_pattern = r'([WL])\s+([WL])\s+([WL])\s+([WL])\s+([WL])\s+\d{4}\s+\d{4}\s+Last 5 Fights\s+([WL])\s+([WL])\s+([WL])\s+([WL])\s+([WL])'
-            last5_match = re.search(last5_pattern, page_text)
+                # Pro Record At Fight
+                if "Pro Record At Fight" in row_text:
+                    left_record = re.search(r'(\d+)-(\d+)-(\d+)', left_val)
+                    right_record = re.search(r'(\d+)-(\d+)-(\d+)', right_val)
+                    if left_record:
+                        comparison["left"]["record_at_fight"] = {
+                            "wins": int(left_record.group(1)),
+                            "losses": int(left_record.group(2)),
+                            "draws": int(left_record.group(3))
+                        }
+                    if right_record:
+                        comparison["right"]["record_at_fight"] = {
+                            "wins": int(right_record.group(1)),
+                            "losses": int(right_record.group(2)),
+                            "draws": int(right_record.group(3))
+                        }
 
-            if last5_match:
-                comparison["left"]["last_5_fights"] = [
-                    last5_match.group(1),
-                    last5_match.group(2),
-                    last5_match.group(3),
-                    last5_match.group(4),
-                    last5_match.group(5)
-                ]
-                comparison["right"]["last_5_fights"] = [
-                    last5_match.group(6),
-                    last5_match.group(7),
-                    last5_match.group(8),
-                    last5_match.group(9),
-                    last5_match.group(10)
-                ]
+                # Age at Fight
+                elif "Age at Fight" in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        age_m = re.search(r'(\d+)\s+years?', val)
+                        months_m = re.search(r'(\d+)\s+months?', val)
+                        days_m = re.search(r'(\d+)\s+days?', val)
+                        weeks_m = re.search(r'(\d+)\s+weeks?', val)
+                        if age_m:
+                            comparison[side]["age_at_fight"] = {
+                                "years": int(age_m.group(1)),
+                                "months": int(months_m.group(1)) if months_m else 0,
+                                "days": int(days_m.group(1)) if days_m else (int(weeks_m.group(1)) * 7 if weeks_m else 0)
+                            }
 
-            # 4. EXTRAER BETTING ODDS
-            # Buscar patrones como "-160 (Slight Favorite)" o "+125 (Slight Underdog)"
-            odds_pattern = r'([+-]\d+)\s+\((.*?)\)\s+Betting Odds\s+([+-]\d+)\s+\((.*?)\)'
-            odds_match = re.search(odds_pattern, page_text)
+                # Nationality - clean the duplicated text
+                elif "Nationality" in row_text and "nationality" not in comparison["left"]:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        clean = self._clean_nationality(val)
+                        if clean:
+                            comparison[side]["nationality"] = clean
 
-            if odds_match:
-                comparison["left"]["betting_odds"] = {
-                    "line": odds_match.group(1),
-                    "description": odds_match.group(2)
-                }
-                comparison["right"]["betting_odds"] = {
-                    "line": odds_match.group(3),
-                    "description": odds_match.group(4)
-                }
+                # Fighting out of - take first line only
+                elif "Fighting out of" in row_text and "fighting_out_of" not in comparison["left"]:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        clean = self._clean_location(val)
+                        if clean:
+                            comparison[side]["fighting_out_of"] = clean
 
-            # 5. EXTRAER TITLE STATUS
-            # Buscar "Champion        Title        Challenger"
-            if "Champion" in page_text and "Challenger" in page_text:
-                title_pattern = r'(Champion|Challenger)\s+Title\s+(Champion|Challenger)'
-                title_match = re.search(title_pattern, page_text)
-                if title_match:
-                    comparison["left"]["title_status"] = title_match.group(1)
-                    comparison["right"]["title_status"] = title_match.group(2)
+                # Height
+                elif "Height" in row_text and "Reach" not in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        h_m = re.search(r"(\d+)'(\d+)\"\s*\((\d+)cm\)", val)
+                        if h_m:
+                            comparison[side]["height"] = {
+                                "feet": int(h_m.group(1)),
+                                "inches": int(h_m.group(2)),
+                                "cm": int(h_m.group(3))
+                            }
 
-            # 6. EXTRAER NACIONALIDAD
-            # Buscar elementos específicos con información de nacionalidad
-            # Buscar en elementos de tabla o divs específicos
-            nationality_elems = response.css('[class*="nationality"]::text, td:contains("Nationality") + td::text').getall()
+                # Reach
+                elif "Reach" in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        r_m = re.search(r'([\d.]+)"\s*\((\d+)cm\)', val)
+                        if r_m:
+                            comparison[side]["reach"] = {
+                                "inches": float(r_m.group(1)),
+                                "cm": int(r_m.group(2))
+                            }
 
-            if len(nationality_elems) >= 2:
-                comparison["left"]["nationality"] = nationality_elems[0].strip()
-                comparison["right"]["nationality"] = nationality_elems[1].strip()
-            else:
-                # Fallback: buscar en texto con patrón más específico
-                nationality_pattern = r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+Nationality\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'
-                nationality_match = re.search(nationality_pattern, page_text)
+                # Latest Weight / Weigh-In
+                elif ("Latest Weight" in row_text or "Weigh-In" in row_text) and "latest_weight" not in comparison["left"]:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        w_m = re.search(r'([\d.]+)\s+lbs\s+\(([\d.]+)\s+kgs\)', val)
+                        if w_m:
+                            comparison[side]["latest_weight"] = {
+                                "lbs": float(w_m.group(1)),
+                                "kgs": float(w_m.group(2))
+                            }
 
-                if nationality_match:
-                    comparison["left"]["nationality"] = nationality_match.group(1).strip()
-                    comparison["right"]["nationality"] = nationality_match.group(2).strip()
+                # Betting Odds
+                elif "Betting Odds" in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        odds_m = re.search(r'([+-]\d+)\s+\((.*?)\)', val)
+                        if odds_m:
+                            comparison[side]["betting_odds"] = {
+                                "line": odds_m.group(1),
+                                "description": odds_m.group(2)
+                            }
 
-            # 7. EXTRAER FIGHTING OUT OF
-            # Buscar patrones más específicos, evitando capturar demasiado texto
-            fighting_out_pattern = r'([A-Za-z][\w\s,\.]+?)\s+Fighting out of\s+([A-Za-z][\w\s,\.]+?)(?:\s+\d{1,3}\s+years|\s+Age\s+at)'
-            fighting_out_match = re.search(fighting_out_pattern, page_text, re.IGNORECASE)
+                # Gym
+                elif "Gym" in row_text and "gym" not in comparison["left"]:
+                    if left_val and left_val != "Gym":
+                        comparison["left"]["gym"] = self._parse_gym_info(left_val)
+                    if right_val and right_val != "Gym":
+                        comparison["right"]["gym"] = self._parse_gym_info(right_val)
 
-            if fighting_out_match:
-                left_location = fighting_out_match.group(1).strip()
-                right_location = fighting_out_match.group(2).strip()
+                # UFC Ranking
+                elif "UFC RANKING" in row_text or "UFC Ranking" in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        rank_m = re.search(r'#\s*(\d+)\s+(?:UFC\s+)?([\w\s]+)', val)
+                        if rank_m:
+                            comparison[side]["ufc_ranking"] = {
+                                "position": int(rank_m.group(1)),
+                                "division": rank_m.group(2).strip()
+                            }
 
-                # Limpiar texto extra (remover newlines y espacios múltiples)
-                left_location = re.sub(r'\s+', ' ', left_location)
-                right_location = re.sub(r'\s+', ' ', right_location)
-
-                # Limitar a una longitud razonable (ej: 100 caracteres)
-                if len(left_location) < 100:
-                    comparison["left"]["fighting_out_of"] = left_location
-                if len(right_location) < 100:
-                    comparison["right"]["fighting_out_of"] = right_location
-
-            # 8. EXTRAER EDAD EN LA PELEA
-            # Buscar patrones como "37 years, 4 months, 2 days        Age at Fight        31 years, 1 month, 1 day"
-            age_pattern = r'(\d+)\s+years?,\s+(\d+)\s+months?,\s+(\d+)\s+days?\s+Age at Fight\s+(\d+)\s+years?,\s+(\d+)\s+months?,\s+(\d+)\s+days?'
-            age_match = re.search(age_pattern, page_text)
-
-            if age_match:
-                comparison["left"]["age_at_fight"] = {
-                    "years": int(age_match.group(1)),
-                    "months": int(age_match.group(2)),
-                    "days": int(age_match.group(3))
-                }
-                comparison["right"]["age_at_fight"] = {
-                    "years": int(age_match.group(4)),
-                    "months": int(age_match.group(5)),
-                    "days": int(age_match.group(6))
-                }
-
-            # 9. EXTRAER PESO MÁS RECIENTE (Latest Weight)
-            # Buscar patrones como "145.0 lbs (65.8 kgs)        Latest Weight        146.0 lbs (66.2 kgs)"
-            weight_pattern = r'([\d.]+)\s+lbs\s+\(([\d.]+)\s+kgs\)\s+Latest Weight\s+([\d.]+)\s+lbs\s+\(([\d.]+)\s+kgs\)'
-            weight_match = re.search(weight_pattern, page_text)
-
-            if weight_match:
-                comparison["left"]["latest_weight"] = {
-                    "lbs": float(weight_match.group(1)),
-                    "kgs": float(weight_match.group(2))
-                }
-                comparison["right"]["latest_weight"] = {
-                    "lbs": float(weight_match.group(3)),
-                    "kgs": float(weight_match.group(4))
-                }
-
-            # 10. EXTRAER ALTURA
-            # Buscar patrones como "5'6\" (168cm)        Height        5'11\" (180cm)"
-            height_pattern = r"(\d+)'(\d+)\"\s+\((\d+)cm\)\s+Height\s+(\d+)'(\d+)\"\s+\((\d+)cm\)"
-            height_match = re.search(height_pattern, page_text)
-
-            if height_match:
-                comparison["left"]["height"] = {
-                    "feet": int(height_match.group(1)),
-                    "inches": int(height_match.group(2)),
-                    "cm": int(height_match.group(3))
-                }
-                comparison["right"]["height"] = {
-                    "feet": int(height_match.group(4)),
-                    "inches": int(height_match.group(5)),
-                    "cm": int(height_match.group(6))
-                }
-
-            # 11. EXTRAER REACH
-            # Buscar patrones como "71.5\" (182cm)        Reach        72.5\" (184cm)"
-            reach_pattern = r'([\d.]+)"\s+\((\d+)cm\)\s+Reach\s+([\d.]+)"\s+\((\d+)cm\)'
-            reach_match = re.search(reach_pattern, page_text)
-
-            if reach_match:
-                comparison["left"]["reach"] = {
-                    "inches": float(reach_match.group(1)),
-                    "cm": int(reach_match.group(2))
-                }
-                comparison["right"]["reach"] = {
-                    "inches": float(reach_match.group(3)),
-                    "cm": int(reach_match.group(4))
-                }
-
-            # 12. EXTRAER GYM
-            # Buscar patrones complejos de gym
-            # Ejemplo: "Tiger Muay Thai (Primary)\nFreestyle Fighting Gym (Other)\nGym        Legacy MMA / Brazilian Warriors (Primary)\nLobo Gym MMA (Striking)"
-            gym_pattern = r'([\w\s/()]+?)\s+Gym\s+([\w\s/()]+?)(?:\s+\d+|$)'
-            gym_match = re.search(gym_pattern, page_text)
-
-            if gym_match:
-                left_gym = gym_match.group(1).strip()
-                right_gym = gym_match.group(2).strip()
-
-                # Limpiar y estructurar información del gym
-                comparison["left"]["gym"] = self._parse_gym_info(left_gym)
-                comparison["right"]["gym"] = self._parse_gym_info(right_gym)
+                # Last 5 Fights
+                elif "Last 5 Fights" in row_text:
+                    for side, val in [("left", left_val), ("right", right_val)]:
+                        fights = re.findall(r'\b([WL])\b', val)
+                        if fights:
+                            comparison[side]["last_5_fights"] = fights[:5]
 
         except Exception as e:
             self.logger.error(f"Error extracting fighter comparison: {e}")
 
         return comparison
+
+    def _clean_nationality(self, raw):
+        """Clean nationality from duplicated HTML text like 'United Kingdom\\n \\n \\nUnited Kingdom'"""
+        if not raw:
+            return None
+        # Split by newlines, strip, remove empty and duplicates
+        parts = [p.strip() for p in raw.split("\n") if p.strip()]
+        # Remove 'Nation' label if present
+        parts = [p for p in parts if p not in ("Nation", "Nationality", "Fights out of")]
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for p in parts:
+            if p not in seen:
+                seen.add(p)
+                unique.append(p)
+        return unique[0] if unique else None
+
+    def _clean_location(self, raw):
+        """Clean fighting_out_of from duplicated HTML text"""
+        if not raw:
+            return None
+        # Take the first meaningful line (before the duplicated short versions)
+        parts = [p.strip() for p in raw.split("\n") if p.strip()]
+        parts = [p for p in parts if p not in ("Fights out of", "Fighting out of")]
+        # The first part is usually the full location like "Hackney, London, England"
+        return parts[0] if parts else None
 
     def _parse_gym_info(self, gym_text):
         """
