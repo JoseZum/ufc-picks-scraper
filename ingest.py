@@ -1,7 +1,8 @@
 """
-Script de ingestión de datos
+Script de ingestión de datos.
 
-Transforma la data scrapeada de Tapology alesquema del backend
+Transforma la data scrapeada de Tapology al esquema del backend.
+Valida, normaliza e inserta en MongoDB.
 """
 
 import json
@@ -13,24 +14,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Config
+# Configuración
 MONGO_URI = os.environ.get("MONGODB_URI")
 if not MONGO_URI:
-    raise ValueError("MONGODB_URI environment variable not set")
+    raise ValueError("MONGODB_URI no configurada")
 
-DB_NAME = "ufc_picks"  
-MIN_DATE = date(2026, 1, 1)  
+DB_NAME = "ufc_picks"
+MIN_DATE = date(2026, 1, 1)
 
-# MongoDB connection
+# Conexión a MongoDB
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 
 events_col = db.events
 bouts_col = db.bouts
-users_col = db.users  
+users_col = db.users
 
 now = datetime.utcnow()
 
+# Estadísticas de ejecución
 stats = {
     "events_processed": 0,
     "events_inserted": 0,
@@ -44,12 +46,12 @@ stats = {
     "skipped_old": 0,
 }
 
-# Store bout_detail data keyed by bout_id for enriching bouts
+# Cache para datos enriquecidos de bouts
 bout_details_cache = {}
 
 
 def is_ufc_event(event_data: dict) -> bool:
-    """Check if event is a UFC event based on name or URL."""
+    """Verifica si el evento es del UFC (por nombre o URL)."""
     name = event_data.get("name", "")
     url = event_data.get("tapology_url", "")
 
@@ -65,12 +67,14 @@ def is_ufc_event(event_data: dict) -> bool:
 
 
 def parse_date(date_str: str) -> date:
+    """Parsea una fecha en formato ISO a objeto date."""
     if not date_str:
         return None
     return date.fromisoformat(date_str)
 
 
 def normalize_card_section(card: str) -> str:
+    """Normaliza la sección de la cartelera a valores estándar."""
     if not card:
         return "main"
 
@@ -85,10 +89,11 @@ def normalize_card_section(card: str) -> str:
 
 
 def extract_slug_from_url(url: str) -> str:
+    """Extrae el slug (último segmento) de una URL de Tapology."""
     if not url:
         return ""
 
-    # Extract last part of URL path
+    # Extrae la última parte del path
     match = re.search(r'/events/\d+-(.+)$', url)
     if match:
         return match.group(1)
