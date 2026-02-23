@@ -104,21 +104,16 @@ class FighterImagesSpider(scrapy.Spider):
         """
         Cargar peleadores que necesitan imágenes desde MongoDB
 
-        Estrategia directa:
-        1. Buscar todos los eventos que NO estén completados
-        2. Traer TODOS los bouts de esos eventos
-        3. Por cada peleador, construir su S3 key esperado
-        4. Hacer HEAD request a S3 para verificar si existe
-        5. Si no existe -> encolar para descarga desde Tapology
+        Estrategia simple basada en MongoDB (sin S3 HEAD checks):
+        1. Buscar eventos no completados
+        2. Traer bouts donde al menos un fighter no tiene image_key
+        3. Skip si ya tiene image_key (a menos que FORCE=true)
 
         Yields:
-            scrapy.Request para cada peleador sin imagen en S3
+            scrapy.Request para cada peleador sin imagen
         """
-        # Inicializar S3 para verificar existencia de archivos
-        s3_service = self._init_s3_service()
-
         try:
-            # Paso 1: Obtener event_ids de eventos no completados
+            # Paso 1: Determinar qué bouts consultar
             if self.force_redownload:
                 bouts_query = {}
             elif self.target_event_id:
@@ -136,16 +131,13 @@ class FighterImagesSpider(scrapy.Spider):
                     self.logger.info("ℹ️  No hay eventos pendientes, nada que procesar")
                     return
 
-                # Paso 2: Traer todos los bouts de esos eventos
                 bouts_query = {"event_id": {"$in": event_ids}}
 
             bouts = await self.db.bouts.find(bouts_query).to_list(length=None)
             self.logger.info(f"📊 Escaneando {len(bouts)} bouts")
 
-            # Paso 3: Recorrer cada peleador y verificar S3
+            # Paso 2: Recorrer peleadores, skip si ya tienen image_key
             seen_fighter_ids = set()
-            # Cache para no repetir HEAD requests al mismo key
-            s3_cache = {}
             fighter_count = 0
             skipped_ok = 0
 
@@ -174,13 +166,8 @@ class FighterImagesSpider(scrapy.Spider):
                         continue
                     seen_fighter_ids.add(tapology_id)
 
-                    # Verificar si la imagen existe en S3
-                    image_key = fighter.get("image_key")
-                    needs_image = self._fighter_needs_image(
-                        s3_service, s3_cache, fighter_name, image_key, tapology_id
-                    )
-
-                    if not needs_image:
+                    # Skip si ya tiene image_key en MongoDB (a menos que FORCE)
+                    if not self.force_redownload and fighter.get("image_key"):
                         skipped_ok += 1
                         continue
 
@@ -202,72 +189,11 @@ class FighterImagesSpider(scrapy.Spider):
 
             self.logger.info(
                 f"✅ Resultado: {fighter_count} por descargar, "
-                f"{skipped_ok} ya tienen imagen en S3"
+                f"{skipped_ok} ya tienen image_key en MongoDB"
             )
 
         except Exception as e:
             self.logger.error(f"❌ Error cargando fighters de MongoDB: {e}")
-
-    def _fighter_needs_image(self, s3_service, s3_cache, fighter_name, image_key, tapology_id):
-        """
-        Determina si un peleador necesita que se descargue su imagen.
-
-        Verifica directamente contra S3:
-        - Si tiene image_key -> HEAD request para ver si existe
-        - Si no tiene image_key -> probar con las extensiones comunes (jpg, png)
-        - Si FORCE mode -> siempre True
-        """
-        if self.force_redownload:
-            return True
-
-        # Sin S3, no podemos verificar -> asumir que necesita imagen
-        if not s3_service:
-            return not bool(image_key)
-
-        if image_key:
-            # Tiene image_key, verificar que el archivo exista en S3
-            if image_key not in s3_cache:
-                s3_cache[image_key] = self._check_s3_exists(s3_service, image_key)
-            if s3_cache[image_key]:
-                return False  # Existe en S3, todo bien
-            self.logger.info(f"🔄 image_key={image_key} pero no existe en S3: {fighter_name}")
-            return True
-
-        # No tiene image_key, probar si ya existe en S3 con extensiones comunes
-        # (puede que se haya subido pero el key no se guardó en MongoDB)
-        for ext in ("jpg", "png"):
-            candidate_key = f"fighters/{tapology_id}.{ext}"
-            if candidate_key not in s3_cache:
-                s3_cache[candidate_key] = self._check_s3_exists(s3_service, candidate_key)
-            if s3_cache[candidate_key]:
-                self.logger.info(
-                    f"💡 {fighter_name} ya tiene imagen en S3 ({candidate_key}) pero falta image_key en MongoDB"
-                )
-                return False  # Ya existe, solo falta el key en MongoDB (sync_image_keys lo arregla)
-
-        return True  # No existe en S3, hay que descargarla
-
-    def _init_s3_service(self):
-        """Inicializa el servicio S3 para verificar existencia de archivos"""
-        try:
-            from tapology_scraper.s3_service import get_s3_service
-            s3 = get_s3_service()
-            self.logger.info("✅ S3 inicializado para verificación de imágenes")
-            return s3
-        except Exception as e:
-            self.logger.warning(f"⚠️  No se pudo inicializar S3: {e}")
-            return None
-
-    def _check_s3_exists(self, s3_service, image_key: str) -> bool:
-        """Verifica si un archivo realmente existe en S3 (HEAD request)"""
-        try:
-            s3_service.s3_client.head_object(
-                Bucket=s3_service.aws_s3_bucket,
-                Key=image_key
-            )
-            return True
-        except Exception:
-            return False
 
     def parse_fighter_image(self, response):
         """
