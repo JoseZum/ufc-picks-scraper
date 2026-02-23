@@ -409,7 +409,17 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
         stats["bouts_inserted"] += 1
         return True
     elif not existing.get("result"):
-        # Only update if no result yet
+        # Preservar image_key y profile_image_url de fighters existentes
+        # (los pone el spider fighter_images, no queremos borrarlos al re-ingestar)
+        existing_fighters = existing.get("fighters", {})
+        for corner in ["red", "blue"]:
+            existing_fighter = existing_fighters.get(corner, {})
+            new_fighter = bout_doc.get("fighters", {}).get(corner, {})
+            if new_fighter and existing_fighter:
+                for img_field in ("image_key", "profile_image_url"):
+                    if existing_fighter.get(img_field) and not new_fighter.get(img_field):
+                        new_fighter[img_field] = existing_fighter[img_field]
+
         bouts_col.update_one(
             {"_id": bout_id},
             {"$set": {k: v for k, v in bout_doc.items() if k != "_id"}}
