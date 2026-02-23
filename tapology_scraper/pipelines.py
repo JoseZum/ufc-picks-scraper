@@ -129,12 +129,17 @@ class MongoDBPipeline:
             "scraped_at": datetime.utcnow().isoformat(),
         }
 
-        # Process fighters data
+        # Preservar image_key y profile_image_url de fighters existentes
+        # (los pone el spider fighter_images, no queremos borrarlos al re-scrapear)
+        existing_bout = await self.db.bouts.find_one({"id": bout_id})
+        existing_fighters = existing_bout.get("fighters", {}) if existing_bout else {}
+
+        # Procesar datos de fighters
         fighters = item.get("fighters", {})
         if fighters:
             bout_doc["fighters"] = {
-                "red": self._prepare_fighter_data(fighters.get("red", {})),
-                "blue": self._prepare_fighter_data(fighters.get("blue", {}))
+                "red": self._prepare_fighter_data(fighters.get("red", {}), existing_fighters.get("red", {})),
+                "blue": self._prepare_fighter_data(fighters.get("blue", {}), existing_fighters.get("blue", {}))
             }
 
         # Remove None values
@@ -201,8 +206,12 @@ class MongoDBPipeline:
 
         spider.logger.info(f"Saved bout details: {bout_id}")
 
-    def _prepare_fighter_data(self, fighter_data):
-        """Prepare basic fighter data for bouts collection"""
+    def _prepare_fighter_data(self, fighter_data, existing_data=None):
+        """Prepara datos básicos del peleador para la colección bouts.
+
+        Preserva image_key y profile_image_url si ya existen en MongoDB,
+        para no borrar las imágenes que subió el spider fighter_images.
+        """
 
         if not fighter_data:
             return {
@@ -211,7 +220,6 @@ class MongoDBPipeline:
                 "tapology_url": None,
             }
 
-        # Use 'name' or 'fighter_name'
         name = fighter_data.get("name") or fighter_data.get("fighter_name")
 
         prepared = {
@@ -220,7 +228,12 @@ class MongoDBPipeline:
             "tapology_url": fighter_data.get("tapology_url"),
         }
 
-        # Remove None values
+        # Preservar campos de imagen del bout existente en MongoDB
+        if existing_data:
+            for img_field in ("image_key", "profile_image_url"):
+                if existing_data.get(img_field) and not prepared.get(img_field):
+                    prepared[img_field] = existing_data[img_field]
+
         return {k: v for k, v in prepared.items() if v is not None}
 
     def _prepare_fighter_detail_data(self, fighter_data):

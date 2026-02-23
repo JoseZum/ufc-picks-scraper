@@ -104,56 +104,59 @@ class FighterImagesSpider(scrapy.Spider):
         """
         Cargar peleadores que necesitan imágenes desde MongoDB
 
-        Busca en la colección 'bouts' todos los fighters que:
+        Busca en 'bouts' fighters que:
         - No tienen image_key (campo no existe o es None)
+        - O tienen image_key pero el archivo no existe en S3
         - Tienen tapology_id y tapology_url válidos
 
-        ¿Por qué buscamos en 'bouts' y no en una colección 'fighters'?
-        Porque actualmente los datos de fighters están embebidos en bouts.
-        Esto puede cambiar en el futuro si creamos una colección separada.
+        También busca en eventos no completados para verificar que
+        las imágenes realmente existen en S3.
 
         Yields:
-            scrapy.Request para cada peleador único sin imagen
+            scrapy.Request para cada peleador único sin imagen válida
         """
         # Construir query para encontrar fighters
         if self.force_redownload:
-            # FORCE mode: get all bouts to re-download all images
             query = {}
         else:
-            # Normal mode: only fighters without images
+            # Buscar bouts sin imagen O bouts de eventos activos (para verificar S3)
             query = {
                 "$or": [
                     {"fighters.red.image_key": None},
                     {"fighters.red.image_key": {"$exists": False}},
                     {"fighters.blue.image_key": None},
                     {"fighters.blue.image_key": {"$exists": False}},
+                    # También incluir eventos no completados para verificar S3
+                    {"status": {"$in": ["scheduled", "upcoming"]}},
                 ]
             }
 
-        # Aplicar filtros opcionales
         if self.target_event_id:
             query["event_id"] = int(self.target_event_id)
 
+        # Inicializar servicio S3 para verificar existencia
+        s3_service = None
         try:
-            # Obtener todos los bouts que coincidan
+            from tapology_scraper.s3_service import get_s3_service
+            s3_service = get_s3_service()
+        except Exception as e:
+            self.logger.warning(f"⚠️  No se pudo inicializar S3 para verificación: {e}")
+
+        try:
             bouts = await self.db.bouts.find(query).to_list(length=None)
-            mode_str = "FORCE re-download" if self.force_redownload else "missing images"
+            mode_str = "FORCE re-download" if self.force_redownload else "missing/broken images"
             self.logger.info(f"📊 Found {len(bouts)} bouts ({mode_str})")
 
-            # Trackear fighters únicos para evitar duplicados
-            # Usamos tapology_id como identificador único
             seen_fighter_ids = set()
             fighter_count = 0
 
             for bout in bouts:
-                # Si llegamos al límite, parar
                 if self.limit and fighter_count >= self.limit:
                     break
 
                 bout_id = bout.get("id") or bout.get("_id")
                 fighters = bout.get("fighters", {})
 
-                # Procesar ambos corners (red y blue)
                 for corner in ["red", "blue"]:
                     if self.limit and fighter_count >= self.limit:
                         break
@@ -163,28 +166,31 @@ class FighterImagesSpider(scrapy.Spider):
                     tapology_url = fighter.get("tapology_url")
                     fighter_name = fighter.get("fighter_name", "Unknown")
 
-                    # Validar que tenga los datos necesarios
                     if not tapology_id or not tapology_url:
                         self.logger.warning(
                             f"⚠️  Bout {bout_id} {corner} fighter missing tapology data"
                         )
                         continue
 
-                    # Si especificamos FIGHTER_ID, filtrar
                     if self.target_fighter_id and tapology_id != self.target_fighter_id:
                         continue
 
-                    # Evitar duplicados
                     if tapology_id in seen_fighter_ids:
                         continue
 
                     # Verificar si realmente necesita imagen
                     image_key = fighter.get("image_key")
                     if image_key and not self.force_redownload:
-                        # Ya tiene imagen y no estamos en modo FORCE, skip
-                        continue
+                        # Tiene image_key, verificar que el archivo exista en S3
+                        if s3_service and not self._check_s3_exists(s3_service, image_key):
+                            self.logger.info(
+                                f"🔄 image_key existe pero archivo S3 falta: {fighter_name} ({image_key})"
+                            )
+                        else:
+                            # Imagen existe en S3, no hace falta re-descargar
+                            seen_fighter_ids.add(tapology_id)
+                            continue
 
-                    # Agregar a la lista de vistos
                     seen_fighter_ids.add(tapology_id)
                     fighter_count += 1
 
@@ -192,7 +198,6 @@ class FighterImagesSpider(scrapy.Spider):
                         f"🎯 Queuing fighter: {fighter_name} (ID: {tapology_id})"
                     )
 
-                    # Generar request para visitar el perfil
                     yield scrapy.Request(
                         url=tapology_url,
                         callback=self.parse_fighter_image,
@@ -208,6 +213,17 @@ class FighterImagesSpider(scrapy.Spider):
 
         except Exception as e:
             self.logger.error(f"❌ Error loading fighters from MongoDB: {e}")
+
+    def _check_s3_exists(self, s3_service, image_key: str) -> bool:
+        """Verifica si un archivo realmente existe en S3"""
+        try:
+            s3_service.s3_client.head_object(
+                Bucket=s3_service.aws_s3_bucket,
+                Key=image_key
+            )
+            return True
+        except Exception:
+            return False
 
     def parse_fighter_image(self, response):
         """

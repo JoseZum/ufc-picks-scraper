@@ -50,8 +50,8 @@ def sync_image_keys():
         for obj in page['Contents']:
             key = obj['Key']  # e.g., "fighters/33428.png"
 
-            # Extraer tapology_id del nombre del archivo
-            match = re.search(r'fighters/(\d+)\.(jpg|png|webp)', key)
+            # Extraer tapology_id del nombre del archivo (numérico o slug)
+            match = re.search(r'fighters/([^/]+)\.(jpg|png|webp)', key)
             if not match:
                 continue
 
