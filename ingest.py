@@ -195,6 +195,21 @@ def parse_reach_to_cm(reach_str: str) -> int | None:
     return None
 
 
+def _extract_numeric_tapology_id(fighter_data: dict) -> str | None:
+    """Extrae el ID numérico de Tapology, ya sea del campo directo o de la URL."""
+    tid = fighter_data.get("tapology_id")
+    if tid and re.match(r"^\d+$", str(tid)):
+        return str(tid)
+
+    # Fallback: extraer de la URL (formato /fighters/12345-nombre)
+    url = fighter_data.get("tapology_url", "")
+    match = re.search(r"/fighters/(\d+)-", url)
+    if match:
+        return match.group(1)
+
+    return tid  # Devolver lo que haya, aunque sea slug
+
+
 def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None) -> dict:
     if not fighter_data:
         return {
@@ -222,7 +237,7 @@ def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None)
         "age_at_fight_years": 0,
         "height_cm": None,
         "reach_cm": None,
-        "tapology_id": fighter_data.get("tapology_id"),
+        "tapology_id": _extract_numeric_tapology_id(fighter_data),
         "tapology_url": fighter_data.get("tapology_url"),
     }
 
