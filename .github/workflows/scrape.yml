@@ -11,8 +11,8 @@ on:
     # Backfill de imágenes (proxy): Diario
     - cron: "0 3 * * *"           # Sin cambios
 
-    # Subida de imágenes a S3: Diario (NUEVO)
-    - cron: "0 4 * * *"           # Nuevo job
+    # Subida de imágenes a S3: Semanal (lunes)
+    - cron: "0 4 * * 1"           # Una vez por semana
 
   workflow_dispatch:
     inputs:
@@ -80,7 +80,7 @@ jobs:
     name: Upload Fighter Images to S3
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') ||
       github.event.inputs.mode == 'fighter_images'
     steps:
       - uses: actions/checkout@v4
