@@ -35,6 +35,7 @@ class UfcSpider(scrapy.Spider):
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
         "FEED_EXPORT_ENCODING": "utf-8",
         "CLOSESPIDER_PAGECOUNT": 500,  # Limite de seguridad: max 500 paginas
+        "ITEM_PIPELINES": {},  # Deshabilitado: usamos ingest.py, no el pipeline directo
     }
 
     def parse(self, response):

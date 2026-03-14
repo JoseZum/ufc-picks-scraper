@@ -9,6 +9,7 @@ import json
 import os
 import re
 from datetime import datetime, date
+from bson import ObjectId
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -457,6 +458,42 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
     return False
 
 
+def cleanup_pipeline_duplicates():
+    """
+    Elimina documentos duplicados creados por el pipeline de Scrapy.
+
+    El pipeline creaba documentos con _id: ObjectId (auto-generado),
+    mientras que ingest.py usa _id: int (bout_id). Esto causaba duplicados.
+    También elimina bouts con status cancelado o campo cancelled=true.
+    """
+    # 1. Eliminar duplicados del pipeline (tienen _id tipo ObjectId en vez de int)
+    pipeline_dupes = bouts_col.delete_many({"_id": {"$type": "objectId"}})
+    if pipeline_dupes.deleted_count > 0:
+        print(f"  Cleaned up {pipeline_dupes.deleted_count} pipeline duplicate bouts")
+        stats["bouts_deleted"] += pipeline_dupes.deleted_count
+
+    # 2. Eliminar bouts cancelados que quedaron en la DB
+    cancelled = bouts_col.delete_many({
+        "$or": [
+            {"status": "cancelled"},
+            {"cancelled": True}
+        ]
+    })
+    if cancelled.deleted_count > 0:
+        print(f"  Cleaned up {cancelled.deleted_count} cancelled bouts")
+        stats["bouts_deleted"] += cancelled.deleted_count
+
+    # 3. Limpiar duplicados de eventos del pipeline
+    event_dupes = events_col.delete_many({"_id": {"$type": "objectId"}})
+    if event_dupes.deleted_count > 0:
+        print(f"  Cleaned up {event_dupes.deleted_count} pipeline duplicate events")
+
+    # 4. Limpiar bout_details duplicados del pipeline
+    detail_dupes = db.bout_details.delete_many({"_id": {"$type": "objectId"}})
+    if detail_dupes.deleted_count > 0:
+        print(f"  Cleaned up {detail_dupes.deleted_count} pipeline duplicate bout_details")
+
+
 def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
     """
     Remove bouts from database that are no longer in Tapology for this event.
@@ -498,6 +535,11 @@ def main():
     if file_age_minutes > 60:
         print(f"WARNING: raw.jsonl tiene {file_age_minutes:.0f} minutos de antigüedad.")
         print("Puede contener data vieja. Ejecuta el scraper de nuevo para datos frescos.")
+    print()
+
+    # 0. Limpiar duplicados del pipeline y bouts cancelados
+    print("Cleaning up pipeline duplicates and cancelled bouts...")
+    cleanup_pipeline_duplicates()
     print()
 
     valid_event_ids = set()
