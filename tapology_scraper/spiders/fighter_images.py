@@ -30,6 +30,36 @@ import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 
+from ..utils import extract_tapology_fighter_id
+
+
+def _image_key_matches_fighter(image_key: Optional[str], fighter_id: Optional[str]) -> bool:
+    if not image_key or not fighter_id or "." not in image_key:
+        return False
+    return image_key.rsplit(".", 1)[0] == f"fighters/{fighter_id}"
+
+
+def _build_fighter_lookup_query(
+    corner: str,
+    canonical_id: Optional[str],
+    source_id: Optional[str],
+    tapology_url: Optional[str],
+) -> dict:
+    clauses = []
+
+    if tapology_url:
+        clauses.append({f"fighters.{corner}.tapology_url": tapology_url})
+    if canonical_id:
+        clauses.append({f"fighters.{corner}.tapology_id": canonical_id})
+    if source_id and source_id != canonical_id:
+        clauses.append({f"fighters.{corner}.tapology_id": source_id})
+
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$or": clauses}
+
 
 class FighterImagesSpider(scrapy.Spider):
     name = "fighter_images"
@@ -152,8 +182,9 @@ class FighterImagesSpider(scrapy.Spider):
                         break
 
                     fighter = fighters.get(corner, {})
-                    tapology_id = fighter.get("tapology_id")
                     tapology_url = fighter.get("tapology_url")
+                    stored_tapology_id = fighter.get("tapology_id")
+                    tapology_id = extract_tapology_fighter_id(tapology_url) or stored_tapology_id
                     fighter_name = fighter.get("fighter_name", "Unknown")
 
                     if not tapology_id or not tapology_url:
@@ -166,8 +197,15 @@ class FighterImagesSpider(scrapy.Spider):
                         continue
                     seen_fighter_ids.add(tapology_id)
 
-                    # Skip si ya tiene image_key en MongoDB (a menos que FORCE)
-                    if not self.force_redownload and fighter.get("image_key"):
+                    # Reprocesar si la key no coincide con el ID canónico extraído de la URL.
+                    has_matching_image_key = _image_key_matches_fighter(
+                        fighter.get("image_key"),
+                        tapology_id
+                    )
+                    has_stale_tapology_id = stored_tapology_id and stored_tapology_id != tapology_id
+
+                    # Skip si ya tiene image_key coherente en MongoDB (a menos que FORCE)
+                    if not self.force_redownload and has_matching_image_key and not has_stale_tapology_id:
                         skipped_ok += 1
                         continue
 
@@ -181,7 +219,9 @@ class FighterImagesSpider(scrapy.Spider):
                         callback=self.parse_fighter_image,
                         meta={
                             "tapology_id": tapology_id,
+                            "source_tapology_id": stored_tapology_id,
                             "fighter_name": fighter_name,
+                            "tapology_url": tapology_url,
                         },
                         errback=self.handle_error,
                         dont_filter=True
@@ -220,8 +260,10 @@ class FighterImagesSpider(scrapy.Spider):
         Yields:
             Dict con tapology_id, fighter_name, e image_url para el pipeline
         """
-        tapology_id = response.meta["tapology_id"]
+        tapology_id = extract_tapology_fighter_id(response.url) or response.meta["tapology_id"]
+        source_tapology_id = response.meta.get("source_tapology_id")
         fighter_name = response.meta["fighter_name"]
+        tapology_url = response.meta.get("tapology_url") or response.url
 
         self.logger.info(f"🔍 Parsing image for: {fighter_name}")
 
@@ -234,7 +276,14 @@ class FighterImagesSpider(scrapy.Spider):
             # Tomar la primera headshot encontrada
             image_url = headshot_imgs[0]
             self.logger.info(f"✅ Found headshot image for {fighter_name}")
-            yield self._create_image_item(tapology_id, fighter_name, image_url, "headshot")
+            yield self._create_image_item(
+                tapology_id,
+                fighter_name,
+                image_url,
+                "headshot",
+                tapology_url=tapology_url,
+                source_tapology_id=source_tapology_id,
+            )
             return
 
         # Estrategia 2: Buscar letterbox images
@@ -244,7 +293,14 @@ class FighterImagesSpider(scrapy.Spider):
         if letterbox_imgs:
             image_url = letterbox_imgs[0]
             self.logger.info(f"✅ Found letterbox image for {fighter_name}")
-            yield self._create_image_item(tapology_id, fighter_name, image_url, "letterbox")
+            yield self._create_image_item(
+                tapology_id,
+                fighter_name,
+                image_url,
+                "letterbox",
+                tapology_url=tapology_url,
+                source_tapology_id=source_tapology_id,
+            )
             return
 
         # Estrategia 3: Buscar cualquier imagen de perfil
@@ -257,7 +313,14 @@ class FighterImagesSpider(scrapy.Spider):
         if profile_imgs:
             image_url = profile_imgs[0]
             self.logger.info(f"✅ Found profile image for {fighter_name}")
-            yield self._create_image_item(tapology_id, fighter_name, image_url, "profile")
+            yield self._create_image_item(
+                tapology_id,
+                fighter_name,
+                image_url,
+                "profile",
+                tapology_url=tapology_url,
+                source_tapology_id=source_tapology_id,
+            )
             return
 
         # No se encontró ninguna imagen
@@ -268,7 +331,9 @@ class FighterImagesSpider(scrapy.Spider):
         tapology_id: str,
         fighter_name: str,
         image_url: str,
-        image_type: str
+        image_type: str,
+        tapology_url: Optional[str] = None,
+        source_tapology_id: Optional[str] = None,
     ) -> dict:
         """
         Crear item para procesar en el pipeline
@@ -308,7 +373,9 @@ class FighterImagesSpider(scrapy.Spider):
         return {
             "type": "fighter_image",
             "tapology_id": tapology_id,
+            "source_tapology_id": source_tapology_id,
             "fighter_name": fighter_name,
+            "tapology_url": tapology_url,
             "image_url": image_url,
             "image_type": image_type,
         }
@@ -404,7 +471,7 @@ class FighterImagesPipeline:
         # Importar y configurar servicio S3
         # Usar el servicio S3 local del scraper (autónomo, no depende del backend)
         try:
-            from tapology_scraper.s3_service import get_s3_service
+            from ..s3_service import get_s3_service
 
             self.s3_service = get_s3_service()
 
@@ -444,7 +511,9 @@ class FighterImagesPipeline:
             return item
 
         tapology_id = item.get("tapology_id")
+        source_tapology_id = item.get("source_tapology_id")
         fighter_name = item.get("fighter_name")
+        tapology_url = item.get("tapology_url")
         image_url = item.get("image_url")
         image_type = item.get("image_type", "unknown")
 
@@ -508,19 +577,25 @@ class FighterImagesPipeline:
             # Actualizar TODOS los bouts donde este fighter aparezca (red o blue)
             # Guardamos solo el image_key, NO la URL completa
 
-            # Update para red corner
-            red_result = await self.db.bouts.update_many(
-                {"fighters.red.tapology_id": tapology_id},
-                {"$set": {"fighters.red.image_key": s3_key}}
-            )
+            red_lookup = _build_fighter_lookup_query("red", tapology_id, source_tapology_id, tapology_url)
+            blue_lookup = _build_fighter_lookup_query("blue", tapology_id, source_tapology_id, tapology_url)
 
-            # Update para blue corner
-            blue_result = await self.db.bouts.update_many(
-                {"fighters.blue.tapology_id": tapology_id},
-                {"$set": {"fighters.blue.image_key": s3_key}}
-            )
+            red_set = {"fighters.red.image_key": s3_key, "fighters.red.tapology_id": tapology_id}
+            blue_set = {"fighters.blue.image_key": s3_key, "fighters.blue.tapology_id": tapology_id}
+            if tapology_url:
+                red_set["fighters.red.tapology_url"] = tapology_url
+                blue_set["fighters.blue.tapology_url"] = tapology_url
 
-            total_updated = red_result.modified_count + blue_result.modified_count
+            red_result = await self.db.bouts.update_many(red_lookup, {"$set": red_set}) if red_lookup else None
+            blue_result = await self.db.bouts.update_many(blue_lookup, {"$set": blue_set}) if blue_lookup else None
+            red_detail_result = await self.db.bout_details.update_many(red_lookup, {"$set": red_set}) if red_lookup else None
+            blue_detail_result = await self.db.bout_details.update_many(blue_lookup, {"$set": blue_set}) if blue_lookup else None
+
+            total_updated = sum(
+                result.modified_count
+                for result in (red_result, blue_result, red_detail_result, blue_detail_result)
+                if result is not None
+            )
 
             if total_updated > 0:
                 spider.logger.info(

@@ -10,6 +10,7 @@ import re
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import boto3
+from botocore.exceptions import ClientError
 
 load_dotenv()
 
@@ -38,7 +39,11 @@ def sync_image_keys():
 
     # Listar todos los objetos en fighters/
     paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=AWS_S3_BUCKET, Prefix='fighters/')
+    try:
+        pages = paginator.paginate(Bucket=AWS_S3_BUCKET, Prefix='fighters/')
+    except ClientError as exc:
+        print(f"❌ No se pudieron listar objetos de S3: {exc}")
+        return
 
     updated_count = 0
     not_found_count = 0
@@ -51,7 +56,7 @@ def sync_image_keys():
             key = obj['Key']  # e.g., "fighters/33428.png"
 
             # Extraer tapology_id del nombre del archivo (numérico o slug)
-            match = re.search(r'fighters/([^/]+)\.(jpg|png|webp)', key)
+            match = re.search(r'fighters/([^/]+)\.(jpg|jpeg|png|webp|avif|gif)', key, re.IGNORECASE)
             if not match:
                 continue
 

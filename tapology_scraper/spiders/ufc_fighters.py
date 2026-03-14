@@ -16,6 +16,30 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 from datetime import datetime, date
 
+from ..utils import extract_tapology_fighter_id
+
+
+def _build_fighter_lookup_query(
+    corner: str,
+    canonical_id: str | None,
+    source_id: str | None,
+    tapology_url: str | None,
+) -> dict:
+    clauses = []
+
+    if tapology_url:
+        clauses.append({f"fighters.{corner}.tapology_url": tapology_url})
+    if canonical_id:
+        clauses.append({f"fighters.{corner}.tapology_id": canonical_id})
+    if source_id and source_id != canonical_id:
+        clauses.append({f"fighters.{corner}.tapology_id": source_id})
+
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$or": clauses}
+
 
 class UfcFightersSpider(scrapy.Spider):
     name = "ufc_fighters"
@@ -112,7 +136,8 @@ class UfcFightersSpider(scrapy.Spider):
 
                     fighter = fighters.get(corner, {})
                     tapology_url = fighter.get("tapology_url")
-                    tapology_id = fighter.get("tapology_id")
+                    stored_tapology_id = fighter.get("tapology_id")
+                    tapology_id = extract_tapology_fighter_id(tapology_url) or stored_tapology_id
                     fighter_name = fighter.get("fighter_name", "Unknown")
 
                     if not tapology_url or not tapology_id:
@@ -126,7 +151,8 @@ class UfcFightersSpider(scrapy.Spider):
                         fighter.get("nationality") == "Unknown" or
                         fighter.get("age_at_fight_years") == 0 or
                         fighter.get("height_cm") is None or
-                        fighter.get("reach_cm") is None
+                        fighter.get("reach_cm") is None or
+                        stored_tapology_id != tapology_id
                     )
 
                     if not needs_update:
@@ -142,7 +168,9 @@ class UfcFightersSpider(scrapy.Spider):
                         callback=self.parse_fighter,
                         meta={
                             "tapology_id": tapology_id,
+                            "source_tapology_id": stored_tapology_id,
                             "fighter_name": fighter_name,
+                            "tapology_url": tapology_url,
                         },
                         errback=self.handle_error,
                         dont_filter=True
@@ -162,15 +190,19 @@ class UfcFightersSpider(scrapy.Spider):
         - Record en formato W-L-D
         - Altura, alcance, edad, nacionalidad, etc.
         """
-        tapology_id = response.meta["tapology_id"]
+        tapology_id = extract_tapology_fighter_id(response.url) or response.meta["tapology_id"]
         fighter_name = response.meta["fighter_name"]
+        source_tapology_id = response.meta.get("source_tapology_id")
+        tapology_url = response.meta.get("tapology_url") or response.url
 
         self.logger.info(f"Parsing fighter: {fighter_name}")
 
         # Initialize extracted data
         data = {
             "tapology_id": tapology_id,
+            "source_tapology_id": source_tapology_id,
             "fighter_name": fighter_name,
+            "tapology_url": tapology_url,
         }
 
         # Extract details from the structured list
@@ -335,7 +367,9 @@ class UfcFightersPipeline:
             return item
 
         tapology_id = item.get("tapology_id")
+        source_tapology_id = item.get("source_tapology_id")
         fighter_name = item.get("fighter_name")
+        tapology_url = item.get("tapology_url")
 
         if not tapology_id:
             spider.logger.warning(f"No tapology_id for fighter {fighter_name}")
@@ -374,31 +408,42 @@ class UfcFightersPipeline:
             bout_detail_fields["ufc_ranking"] = bout_detail_fields.pop("ranking")
 
         # Update all bouts where this fighter appears in red corner
-        red_update = {"$set": {f"fighters.red.{k}": v for k, v in update_fields.items()}}
-        red_result = await self.db.bouts.update_many(
-            {"fighters.red.tapology_id": tapology_id},
-            red_update
-        )
-        red_detail_update = {"$set": {f"fighters.red.{k}": v for k, v in bout_detail_fields.items()}}
-        red_detail_result = await self.db.bout_details.update_many(
-            {"fighters.red.tapology_id": tapology_id},
-            red_detail_update
-        )
+        red_lookup = _build_fighter_lookup_query("red", tapology_id, source_tapology_id, tapology_url)
+        blue_lookup = _build_fighter_lookup_query("blue", tapology_id, source_tapology_id, tapology_url)
+
+        red_bout_fields = {f"fighters.red.{k}": v for k, v in update_fields.items()}
+        blue_bout_fields = {f"fighters.blue.{k}": v for k, v in update_fields.items()}
+        red_detail_fields = {f"fighters.red.{k}": v for k, v in bout_detail_fields.items()}
+        blue_detail_fields = {f"fighters.blue.{k}": v for k, v in bout_detail_fields.items()}
+
+        red_bout_fields["fighters.red.tapology_id"] = tapology_id
+        blue_bout_fields["fighters.blue.tapology_id"] = tapology_id
+        red_detail_fields["fighters.red.tapology_id"] = tapology_id
+        blue_detail_fields["fighters.blue.tapology_id"] = tapology_id
+
+        if tapology_url:
+            red_bout_fields["fighters.red.tapology_url"] = tapology_url
+            blue_bout_fields["fighters.blue.tapology_url"] = tapology_url
+            red_detail_fields["fighters.red.tapology_url"] = tapology_url
+            blue_detail_fields["fighters.blue.tapology_url"] = tapology_url
+
+        red_update = {"$set": red_bout_fields}
+        red_result = await self.db.bouts.update_many(red_lookup, red_update) if red_lookup else None
+        red_detail_update = {"$set": red_detail_fields}
+        red_detail_result = await self.db.bout_details.update_many(red_lookup, red_detail_update) if red_lookup else None
 
         # Update all bouts where this fighter appears in blue corner
-        blue_update = {"$set": {f"fighters.blue.{k}": v for k, v in update_fields.items()}}
-        blue_result = await self.db.bouts.update_many(
-            {"fighters.blue.tapology_id": tapology_id},
-            blue_update
-        )
-        blue_detail_update = {"$set": {f"fighters.blue.{k}": v for k, v in bout_detail_fields.items()}}
-        blue_detail_result = await self.db.bout_details.update_many(
-            {"fighters.blue.tapology_id": tapology_id},
-            blue_detail_update
-        )
+        blue_update = {"$set": blue_bout_fields}
+        blue_result = await self.db.bouts.update_many(blue_lookup, blue_update) if blue_lookup else None
+        blue_detail_update = {"$set": blue_detail_fields}
+        blue_detail_result = await self.db.bout_details.update_many(blue_lookup, blue_detail_update) if blue_lookup else None
 
-        total_bouts_updated = red_result.modified_count + blue_result.modified_count
-        total_bout_details_updated = red_detail_result.modified_count + blue_detail_result.modified_count
+        total_bouts_updated = sum(
+            result.modified_count for result in (red_result, blue_result) if result is not None
+        )
+        total_bout_details_updated = sum(
+            result.modified_count for result in (red_detail_result, blue_detail_result) if result is not None
+        )
 
         if total_bouts_updated > 0 or total_bout_details_updated > 0:
             spider.logger.info(

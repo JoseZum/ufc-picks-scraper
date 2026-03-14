@@ -2,6 +2,8 @@ import scrapy
 import re
 from datetime import datetime, date
 
+from tapology_scraper.utils import extract_tapology_fighter_id
+
 
 class UfcSpider(scrapy.Spider):
     name = "ufc"
@@ -253,7 +255,7 @@ class UfcSpider(scrapy.Spider):
                 href = link.css("::attr(href)").get()
                 name = link.css("::text").get()
                 if href and name:
-                    fighter_id = self._extract_id(r"/fighters/([^-]+)", href)
+                    fighter_id = extract_tapology_fighter_id(href)
                     # Solo agregar si no hemos visto este fighter_id antes
                     if fighter_id and fighter_id not in seen_fighter_ids:
                         seen_fighter_ids.add(fighter_id)

@@ -11,8 +11,8 @@ on:
     # Backfill de imágenes (proxy): Diario
     - cron: "0 3 * * *"           # Sin cambios
 
-    # Subida de imágenes a S3: Semanal (lunes)
-    - cron: "0 4 * * 1"           # Una vez por semana
+    # Subida de imágenes de fighters a S3: diario
+    - cron: "0 4 * * *"           # Diario para no acumular faltantes
 
   workflow_dispatch:
     inputs:
@@ -80,7 +80,7 @@ jobs:
     name: Upload Fighter Images to S3
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
       github.event.inputs.mode == 'fighter_images'
     steps:
       - uses: actions/checkout@v4
@@ -89,9 +89,8 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
 
-      # Ejecutar spider con límite para evitar saturación
       - name: Run fighter images spider
-        run: scrapy crawl fighter_images -a LIMIT=100
+        run: scrapy crawl fighter_images
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
