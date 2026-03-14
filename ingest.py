@@ -42,6 +42,9 @@ stats = {
     "bouts_inserted": 0,
     "bouts_updated": 0,
     "bouts_deleted": 0,
+    "bouts_cancelled_removed": 0,
+    "pipeline_dupes_cleaned": 0,
+    "pipeline_dupes_migrated": 0,
     "bout_details_processed": 0,
     "skipped_non_ufc": 0,
     "skipped_old": 0,
@@ -460,19 +463,97 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
 
 def cleanup_pipeline_duplicates():
     """
-    Elimina documentos duplicados creados por el pipeline de Scrapy.
+    Migra documentos creados por el pipeline de Scrapy al formato correcto.
 
     El pipeline creaba documentos con _id: ObjectId (auto-generado),
     mientras que ingest.py usa _id: int (bout_id). Esto causaba duplicados.
-    También elimina bouts con status cancelado o campo cancelled=true.
+    Si un bout solo existe como copia del pipeline, lo migra en vez de borrarlo.
     """
-    # 1. Eliminar duplicados del pipeline (tienen _id tipo ObjectId en vez de int)
-    pipeline_dupes = bouts_col.delete_many({"_id": {"$type": "objectId"}})
-    if pipeline_dupes.deleted_count > 0:
-        print(f"  Cleaned up {pipeline_dupes.deleted_count} pipeline duplicate bouts")
-        stats["bouts_deleted"] += pipeline_dupes.deleted_count
+    # --- Bouts ---
+    pipeline_bouts = list(bouts_col.find({"_id": {"$type": "objectId"}}))
+    for bout in pipeline_bouts:
+        bout_id = bout.get("id")
+        if bout_id is None:
+            bouts_col.delete_one({"_id": bout["_id"]})
+            stats["pipeline_dupes_cleaned"] += 1
+            continue
 
-    # 2. Eliminar bouts cancelados que quedaron en la DB
+        bout_id_int = int(bout_id)
+        int_version = bouts_col.find_one({"_id": bout_id_int})
+
+        if int_version:
+            # Ya existe la versión correcta, borrar el duplicado
+            bouts_col.delete_one({"_id": bout["_id"]})
+            stats["pipeline_dupes_cleaned"] += 1
+        else:
+            # No existe versión con _id int — migrar este documento
+            new_doc = {k: v for k, v in bout.items() if k != "_id"}
+            new_doc["_id"] = bout_id_int
+            try:
+                bouts_col.insert_one(new_doc)
+                stats["pipeline_dupes_migrated"] += 1
+            except Exception:
+                pass  # Ya existe (race condition)
+            bouts_col.delete_one({"_id": bout["_id"]})
+            stats["pipeline_dupes_cleaned"] += 1
+
+    if stats["pipeline_dupes_cleaned"] > 0:
+        print(f"  Bouts: {stats['pipeline_dupes_cleaned']} duplicados limpiados, {stats['pipeline_dupes_migrated']} migrados")
+
+    # --- Eventos ---
+    pipeline_events = list(events_col.find({"_id": {"$type": "objectId"}}))
+    events_migrated = 0
+    events_cleaned = 0
+    for event in pipeline_events:
+        event_id = event.get("id")
+        if event_id is None:
+            events_col.delete_one({"_id": event["_id"]})
+            events_cleaned += 1
+            continue
+
+        event_id_int = int(event_id)
+        int_version = events_col.find_one({"_id": event_id_int})
+
+        if int_version:
+            events_col.delete_one({"_id": event["_id"]})
+            events_cleaned += 1
+        else:
+            new_doc = {k: v for k, v in event.items() if k != "_id"}
+            new_doc["_id"] = event_id_int
+            try:
+                events_col.insert_one(new_doc)
+                events_migrated += 1
+            except Exception:
+                pass
+            events_col.delete_one({"_id": event["_id"]})
+            events_cleaned += 1
+
+    if events_cleaned > 0:
+        print(f"  Events: {events_cleaned} duplicados limpiados, {events_migrated} migrados")
+
+    # --- Bout Details ---
+    pipeline_details = list(db.bout_details.find({"_id": {"$type": "objectId"}}))
+    details_cleaned = 0
+    for detail in pipeline_details:
+        bout_id = detail.get("bout_id")
+        if bout_id is not None:
+            # bout_details usa bout_id como campo, no como _id
+            existing = db.bout_details.find_one({"_id": {"$not": {"$type": "objectId"}}, "bout_id": int(bout_id)})
+            if not existing:
+                # Migrar: crear con _id = bout_id
+                new_doc = {k: v for k, v in detail.items() if k != "_id"}
+                new_doc["_id"] = int(bout_id)
+                try:
+                    db.bout_details.insert_one(new_doc)
+                except Exception:
+                    pass
+        db.bout_details.delete_one({"_id": detail["_id"]})
+        details_cleaned += 1
+
+    if details_cleaned > 0:
+        print(f"  Bout details: {details_cleaned} duplicados limpiados")
+
+    # --- Bouts cancelados ---
     cancelled = bouts_col.delete_many({
         "$or": [
             {"status": "cancelled"},
@@ -480,18 +561,8 @@ def cleanup_pipeline_duplicates():
         ]
     })
     if cancelled.deleted_count > 0:
-        print(f"  Cleaned up {cancelled.deleted_count} cancelled bouts")
-        stats["bouts_deleted"] += cancelled.deleted_count
-
-    # 3. Limpiar duplicados de eventos del pipeline
-    event_dupes = events_col.delete_many({"_id": {"$type": "objectId"}})
-    if event_dupes.deleted_count > 0:
-        print(f"  Cleaned up {event_dupes.deleted_count} pipeline duplicate events")
-
-    # 4. Limpiar bout_details duplicados del pipeline
-    detail_dupes = db.bout_details.delete_many({"_id": {"$type": "objectId"}})
-    if detail_dupes.deleted_count > 0:
-        print(f"  Cleaned up {detail_dupes.deleted_count} pipeline duplicate bout_details")
+        print(f"  Cancelled bouts removed: {cancelled.deleted_count}")
+        stats["bouts_cancelled_removed"] = cancelled.deleted_count
 
 
 def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
@@ -624,7 +695,11 @@ def main():
     print("\n" + "="*50)
     print("INGESTION COMPLETE")
     print("="*50)
-    print(f"Bout details cached: {stats['bout_details_processed']}")
+    print(f"\nPipeline cleanup:")
+    print(f"  - Duplicates cleaned: {stats['pipeline_dupes_cleaned']}")
+    print(f"  - Migrated (rescued): {stats['pipeline_dupes_migrated']}")
+    print(f"  - Cancelled removed: {stats['bouts_cancelled_removed']}")
+    print(f"\nBout details cached: {stats['bout_details_processed']}")
     print(f"Events processed: {stats['events_processed']}")
     print(f"  - Inserted: {stats['events_inserted']}")
     print(f"  - Updated: {stats['events_updated']}")
