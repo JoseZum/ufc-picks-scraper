@@ -317,7 +317,7 @@ class UfcFightersPipeline:
     """
     Pipeline para actualizar MongoDB con los detalles de peleadores extraídos.
 
-    Actualiza todos los bouts donde aparece el fighter con sus nuevos datos.
+    Actualiza todos los bouts y bout_details donde aparece el fighter con sus nuevos datos.
     """
 
     def __init__(self):
@@ -369,11 +369,20 @@ class UfcFightersPipeline:
             spider.logger.warning(f"No fields to update for fighter {fighter_name}")
             return item
 
+        bout_detail_fields = dict(update_fields)
+        if "ranking" in bout_detail_fields:
+            bout_detail_fields["ufc_ranking"] = bout_detail_fields.pop("ranking")
+
         # Update all bouts where this fighter appears in red corner
         red_update = {"$set": {f"fighters.red.{k}": v for k, v in update_fields.items()}}
         red_result = await self.db.bouts.update_many(
             {"fighters.red.tapology_id": tapology_id},
             red_update
+        )
+        red_detail_update = {"$set": {f"fighters.red.{k}": v for k, v in bout_detail_fields.items()}}
+        red_detail_result = await self.db.bout_details.update_many(
+            {"fighters.red.tapology_id": tapology_id},
+            red_detail_update
         )
 
         # Update all bouts where this fighter appears in blue corner
@@ -382,13 +391,25 @@ class UfcFightersPipeline:
             {"fighters.blue.tapology_id": tapology_id},
             blue_update
         )
+        blue_detail_update = {"$set": {f"fighters.blue.{k}": v for k, v in bout_detail_fields.items()}}
+        blue_detail_result = await self.db.bout_details.update_many(
+            {"fighters.blue.tapology_id": tapology_id},
+            blue_detail_update
+        )
 
-        total_updated = red_result.modified_count + blue_result.modified_count
+        total_bouts_updated = red_result.modified_count + blue_result.modified_count
+        total_bout_details_updated = red_detail_result.modified_count + blue_detail_result.modified_count
 
-        if total_updated > 0:
-            spider.logger.info(f"Updated {total_updated} bouts for fighter {fighter_name}: {list(update_fields.keys())}")
+        if total_bouts_updated > 0 or total_bout_details_updated > 0:
+            spider.logger.info(
+                f"Updated fighter {fighter_name}: "
+                f"{total_bouts_updated} bouts, {total_bout_details_updated} bout_details "
+                f"({list(update_fields.keys())})"
+            )
         else:
-            spider.logger.warning(f"No bouts updated for fighter {fighter_name} (tapology_id: {tapology_id})")
+            spider.logger.warning(
+                f"No bouts or bout_details updated for fighter {fighter_name} (tapology_id: {tapology_id})"
+            )
 
         return item
 

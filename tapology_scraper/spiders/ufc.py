@@ -36,6 +36,12 @@ class UfcSpider(scrapy.Spider):
         "FEED_EXPORT_ENCODING": "utf-8",
         "CLOSESPIDER_PAGECOUNT": 500,  # Limite de seguridad: max 500 paginas
         "ITEM_PIPELINES": {},  # Deshabilitado: usamos ingest.py, no el pipeline directo
+        "DEFAULT_REQUEST_HEADERS": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.tapology.com/",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
     }
 
     def parse(self, response):
@@ -175,6 +181,7 @@ class UfcSpider(scrapy.Spider):
         # Peleas de la cartelera en general
         cards = response.css('div[data-bout-wrapper]')
         card_counters = {"Main Card": 0, "Prelim": 0, "Early Prelim": 0}
+        seen_bout_ids = set()
 
         for bout_wrapper in cards:
             bout_href = bout_wrapper.css('a[href^="/fightcenter/bouts/"]::attr(href)').get()
@@ -182,6 +189,9 @@ class UfcSpider(scrapy.Spider):
                 continue
 
             bout_id = self._extract_id(r"/bouts/(\d+)-", bout_href)
+            if not bout_id or bout_id in seen_bout_ids:
+                continue
+            seen_bout_ids.add(bout_id)
 
             # Extraer etiqueta de la cartelera (Evento Principal, Cartelera Principal, Preliminares, Preliminares Tempranas)
             card_label = bout_wrapper.css("span.uppercase.font-bold a::text").get()
@@ -302,8 +312,20 @@ class UfcSpider(scrapy.Spider):
 
     # Detalle de la pelea
     def parse_bout(self, response, event_id, bout_id, red_fighter=None, blue_fighter=None):
-        # Extraer detalles estructurados de la pelea desde la lista
-        details_list = response.css('ul[data-controller="unordered-list-background"] li')
+        # Saltar paginas incompletas o interstitials para no corromper bout_details.
+        details_list = response.xpath(
+            "//h4[contains(normalize-space(), 'Fight Details')]/following-sibling::ul[1]/li"
+        )
+        if not details_list:
+            details_list = response.css("#boutDetailsHolderSm li, #boutDetailsHolderLg li")
+
+        has_comparison_table = bool(response.css("#boutComparisonTable"))
+        has_matchup = bool(response.css("#boutMatchup"))
+        if not has_comparison_table and not has_matchup:
+            self.logger.warning(
+                f"Skipping invalid bout detail page for bout {bout_id}: expected Tapology markup not found"
+            )
+            return
 
         bout_data = {}
         for li in details_list:
@@ -341,10 +363,12 @@ class UfcSpider(scrapy.Spider):
         else:
             blue_fighter = dict(blue_fighter)  # Copy to avoid mutating original
 
-        # Extraer nicknames - filter out ad div IDs and HTML artifacts
-        all_text = " ".join(response.css("body ::text").getall())
-        all_quoted = re.findall(r'"([^"]+)"', all_text)
-        nicknames = [q for q in all_quoted if not q.startswith("tapology_") and len(q) < 40 and "\n" not in q and "(" not in q]
+        # Extraer nicknames desde el matchup principal; evita capturar IDs/artefactos del layout.
+        nicknames = [
+            text.strip().strip('"')
+            for text in response.css("#boutMatchup div.text-xs.text-tap_gold::text").getall()
+            if text and text.strip()
+        ]
 
         if len(nicknames) > 0:
             red_fighter["nickname"] = nicknames[0]
@@ -424,6 +448,28 @@ class UfcSpider(scrapy.Spider):
                 "time": time
             }
 
+        detail_keys = {
+            "record_at_fight",
+            "age_at_fight",
+            "nationality",
+            "fighting_out_of",
+            "height",
+            "reach",
+            "latest_weight",
+            "betting_odds",
+            "gym",
+            "ufc_ranking",
+            "last_5_fights",
+        }
+        extracted_detail_data = any(key in red_fighter for key in detail_keys) or any(
+            key in blue_fighter for key in detail_keys
+        )
+        if not (extracted_detail_data or bout_date or weight_info or result):
+            self.logger.warning(
+                f"Skipping empty bout detail for bout {bout_id}: page did not yield any structured Tapology data"
+            )
+            return
+
         yield {
             "type": "bout_detail",
             "event_id": event_id,
@@ -449,13 +495,16 @@ class UfcSpider(scrapy.Spider):
         comparison = {"left": {}, "right": {}}
 
         try:
-            # The comparison table is the first table on the bout page
-            tables = response.css("table")
-            if not tables:
-                return comparison
+            table = response.css("#boutComparisonTable")
+            if not table:
+                tables = response.css("table")
+                if not tables:
+                    return comparison
+                table = tables[0]
 
-            table = tables[0]
             rows = table.css("tr")
+            if not rows:
+                return comparison
 
             for row in rows:
                 cells = row.css("td")

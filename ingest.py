@@ -46,6 +46,7 @@ stats = {
     "pipeline_dupes_cleaned": 0,
     "pipeline_dupes_migrated": 0,
     "bout_details_processed": 0,
+    "bouts_enriched": 0,
     "skipped_non_ufc": 0,
     "skipped_old": 0,
 }
@@ -363,6 +364,34 @@ def process_bout_detail(item: dict):
         stats["bout_details_processed"] += 1
 
 
+def _bout_detail_has_structured_data(bout_detail: dict | None) -> bool:
+    """True when a cached bout_detail contains real fighter enrichment fields."""
+    if not bout_detail:
+        return False
+
+    structured_fields = {
+        "record_at_fight",
+        "age_at_fight",
+        "nationality",
+        "fighting_out_of",
+        "height",
+        "reach",
+        "latest_weight",
+        "betting_odds",
+        "gym",
+        "ufc_ranking",
+        "last_5_fights",
+    }
+
+    fighters = bout_detail.get("fighters", {})
+    for corner in ("red", "blue"):
+        fighter = fighters.get(corner, {})
+        if any(field in fighter for field in structured_fields):
+            return True
+
+    return False
+
+
 # Valores por defecto que indican que NO hay data real
 _FIGHTER_DEFAULTS = {
     "nationality": "Unknown",
@@ -372,29 +401,49 @@ _FIGHTER_DEFAULTS = {
     "reach_cm": None,
     "fighting_out_of": None,
     "ranking": None,
+    "ufc_ranking": None,
     "last_fights": [],
+    "last_5_fights": [],
 }
+
+
+def _is_missing_value(value):
+    """True when a field is absent/empty and should inherit existing data."""
+    return value in (None, "", [], {})
 
 
 def _merge_fighter_data(new_fighter: dict, existing_fighter: dict):
     """
-    Preserva data existente de fighters si la nueva tiene valores por defecto.
-    Evita sobreescribir records reales (ej: 23-5-0) con 0-0-0.
+    Preserva data existente de fighters si la nueva tiene valores por defecto
+    o si directamente omitiÃ³ campos que ya estaban guardados.
     """
     if not existing_fighter or not new_fighter:
         return
+
+    # Si el scrape nuevo no trae una clave, mantener la ya persistida.
+    for field, existing_val in existing_fighter.items():
+        if _is_missing_value(new_fighter.get(field)) and not _is_missing_value(existing_val):
+            new_fighter[field] = existing_val
 
     for field, default_val in _FIGHTER_DEFAULTS.items():
         new_val = new_fighter.get(field)
         existing_val = existing_fighter.get(field)
         # Si el valor nuevo es default y el existente tiene data real, preservar
-        if new_val == default_val and existing_val and existing_val != default_val:
+        if (
+            (new_val == default_val or _is_missing_value(new_val))
+            and not _is_missing_value(existing_val)
+            and existing_val != default_val
+        ):
             new_fighter[field] = existing_val
 
     # Preservar campos extra que ingest no genera pero el pipeline sí
     for extra_field in ("gym", "betting_odds", "title_status", "nickname"):
-        if existing_fighter.get(extra_field) and not new_fighter.get(extra_field):
-            new_fighter[extra_field] = existing_fighter[extra_field]
+        new_val = new_fighter.get(extra_field)
+        existing_val = existing_fighter.get(extra_field)
+        if extra_field == "nickname" and isinstance(new_val, str) and new_val.startswith("tapology_") and existing_val:
+            new_fighter[extra_field] = existing_val
+        elif existing_val and _is_missing_value(new_val):
+            new_fighter[extra_field] = existing_val
 
 
 def persist_bout_details(valid_event_ids: set):
@@ -516,6 +565,8 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
     stats["bouts_processed"] += 1
 
     bout_id = int(item["bout_id"])
+    if _bout_detail_has_structured_data(bout_details_cache.get(bout_id)):
+        stats["bouts_enriched"] += 1
 
     # Saltar bouts cancelados y eliminarlos de la DB si existen
     if item.get("cancelled") or item.get("status") == "cancelled":
@@ -812,7 +863,7 @@ def main():
     print(f"  - Inserted: {stats['bouts_inserted']}")
     print(f"  - Updated: {stats['bouts_updated']}")
     print(f"  - Deleted (no longer in Tapology): {stats['bouts_deleted']}")
-    print(f"  - Enriched with fighter details: {min(stats['bout_details_processed'], stats['bouts_processed'])}")
+    print(f"  - Enriched with fighter details: {stats['bouts_enriched']}")
 
 
 if __name__ == "__main__":
