@@ -363,6 +363,103 @@ def process_bout_detail(item: dict):
         stats["bout_details_processed"] += 1
 
 
+# Valores por defecto que indican que NO hay data real
+_FIGHTER_DEFAULTS = {
+    "nationality": "Unknown",
+    "record_at_fight": {"wins": 0, "losses": 0, "draws": 0},
+    "age_at_fight_years": 0,
+    "height_cm": None,
+    "reach_cm": None,
+    "fighting_out_of": None,
+    "ranking": None,
+    "last_fights": [],
+}
+
+
+def _merge_fighter_data(new_fighter: dict, existing_fighter: dict):
+    """
+    Preserva data existente de fighters si la nueva tiene valores por defecto.
+    Evita sobreescribir records reales (ej: 23-5-0) con 0-0-0.
+    """
+    if not existing_fighter or not new_fighter:
+        return
+
+    for field, default_val in _FIGHTER_DEFAULTS.items():
+        new_val = new_fighter.get(field)
+        existing_val = existing_fighter.get(field)
+        # Si el valor nuevo es default y el existente tiene data real, preservar
+        if new_val == default_val and existing_val and existing_val != default_val:
+            new_fighter[field] = existing_val
+
+    # Preservar campos extra que ingest no genera pero el pipeline sí
+    for extra_field in ("gym", "betting_odds", "title_status", "nickname"):
+        if existing_fighter.get(extra_field) and not new_fighter.get(extra_field):
+            new_fighter[extra_field] = existing_fighter[extra_field]
+
+
+def persist_bout_details(valid_event_ids: set):
+    """
+    Persiste los bout_details cacheados a MongoDB.
+
+    El backend lee la colección bout_details para mostrar datos detallados
+    de fighters (records, nationality, height, reach, etc.).
+    Sin esto, el frontend muestra todo en 0-0-0.
+    """
+    inserted = 0
+    updated = 0
+
+    for bout_id, detail in bout_details_cache.items():
+        event_id = int(detail.get("event_id", 0))
+        if event_id not in valid_event_ids:
+            continue
+
+        detail_doc = {
+            "bout_id": bout_id,
+            "event_id": event_id,
+            "bout_date": detail.get("bout_date"),
+            "broadcast": detail.get("broadcast"),
+            "weight_info": detail.get("weight_info"),
+            "fighters": detail.get("fighters", {}),
+            "result": detail.get("result"),
+            "scraped_at": now,
+        }
+
+        existing = db.bout_details.find_one({"bout_id": bout_id})
+
+        if existing:
+            # Preservar data de fighters existente si la nueva está vacía
+            for corner in ["red", "blue"]:
+                existing_fighter = existing.get("fighters", {}).get(corner, {})
+                new_fighter = detail_doc.get("fighters", {}).get(corner, {})
+                if existing_fighter and new_fighter:
+                    _merge_fighter_data(new_fighter, existing_fighter)
+
+            # No sobreescribir resultado existente con None
+            if existing.get("result") and not detail_doc.get("result"):
+                detail_doc["result"] = existing["result"]
+
+            db.bout_details.update_one(
+                {"bout_id": bout_id},
+                {"$set": detail_doc}
+            )
+            updated += 1
+        else:
+            detail_doc["_id"] = bout_id
+            try:
+                db.bout_details.insert_one(detail_doc)
+                inserted += 1
+            except Exception:
+                # Puede existir con otro _id
+                db.bout_details.update_one(
+                    {"bout_id": bout_id},
+                    {"$set": detail_doc},
+                    upsert=True
+                )
+                updated += 1
+
+    print(f"  Bout details: {inserted} inserted, {updated} updated")
+
+
 def process_event(item: dict) -> bool:
     event_date = parse_date(item.get("event_date"))
 
@@ -440,16 +537,18 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
         stats["bouts_inserted"] += 1
         return True
     elif not existing.get("result"):
-        # Preservar image_key y profile_image_url de fighters existentes
-        # (los pone el spider fighter_images, no queremos borrarlos al re-ingestar)
+        # Preservar data existente de fighters (imágenes + datos enriquecidos)
         existing_fighters = existing.get("fighters", {})
         for corner in ["red", "blue"]:
             existing_fighter = existing_fighters.get(corner, {})
             new_fighter = bout_doc.get("fighters", {}).get(corner, {})
             if new_fighter and existing_fighter:
+                # Preservar imágenes
                 for img_field in ("image_key", "profile_image_url"):
                     if existing_fighter.get(img_field) and not new_fighter.get(img_field):
                         new_fighter[img_field] = existing_fighter[img_field]
+                # Preservar data enriquecida si la nueva tiene defaults
+                _merge_fighter_data(new_fighter, existing_fighter)
 
         bouts_col.update_one(
             {"_id": bout_id},
@@ -617,8 +716,8 @@ def main():
     # Track scraped bouts per event for cleanup
     scraped_bouts_by_event = {}
 
-    # 1. First pass: Cache bout_detail items for fighter enrichment
-    print("Caching bout details for fighter data...")
+    # 1. First pass: cargar bout_details en memoria para enriquecer fighters
+    print("Loading bout details from raw.jsonl...")
     with open("raw.jsonl", "r", encoding="utf-8") as f:
         for line in f:
             try:
@@ -630,7 +729,7 @@ def main():
             except Exception as e:
                 print(f"  Error caching bout_detail: {e}")
 
-    print(f"Cached {stats['bout_details_processed']} bout details")
+    print(f"Loaded {stats['bout_details_processed']} bout details")
 
     # 2. Procesar eventos
     print("\nProcessing events...")
@@ -674,7 +773,11 @@ def main():
             except Exception as e:
                 print(f"  Error processing bout: {e}")
 
-    # 4. Clean up deleted bouts for each event
+    # 4. Persistir bout_details a MongoDB (el backend los necesita para fighter info)
+    print("\nPersisting bout details to MongoDB...")
+    persist_bout_details(valid_event_ids)
+
+    # 5. Clean up deleted bouts for each event
     print("\nCleaning up deleted bouts...")
     for event_id in valid_event_ids:
         scraped_bout_ids = scraped_bouts_by_event.get(event_id, set())
@@ -699,7 +802,7 @@ def main():
     print(f"  - Duplicates cleaned: {stats['pipeline_dupes_cleaned']}")
     print(f"  - Migrated (rescued): {stats['pipeline_dupes_migrated']}")
     print(f"  - Cancelled removed: {stats['bouts_cancelled_removed']}")
-    print(f"\nBout details cached: {stats['bout_details_processed']}")
+    print(f"\nBout details loaded: {stats['bout_details_processed']}")
     print(f"Events processed: {stats['events_processed']}")
     print(f"  - Inserted: {stats['events_inserted']}")
     print(f"  - Updated: {stats['events_updated']}")
