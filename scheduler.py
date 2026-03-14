@@ -74,12 +74,17 @@ for event in events.find({"status": "upcoming"}):
         if NOW >= window:
             print(f"Scraping evento {event['_id']} (ventana {idx})")
 
+            # Limpiar raw.jsonl antes de cada scrape para evitar data vieja
+            raw_file = os.path.join(os.path.dirname(__file__), "raw.jsonl")
+            if os.path.exists(raw_file):
+                os.remove(raw_file)
+
             # Ejecutar scraper
             subprocess.run([
                 "scrapy", "crawl", "ufc",
                 "-a", f"EVENT_ID={event['_id']}",
                 "-a", "MODE=results",
-                "-o", "raw.jsonl"
+                "-o", raw_file
             ], check=True)
 
             # Ingerir en MongoDB

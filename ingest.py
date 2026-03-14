@@ -415,8 +415,20 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
     stats["bouts_processed"] += 1
 
     bout_id = int(item["bout_id"])
-    existing = bouts_col.find_one({"_id": bout_id})
 
+    # Saltar bouts cancelados y eliminarlos de la DB si existen
+    if item.get("cancelled") or item.get("status") == "cancelled":
+        existing = bouts_col.find_one({"_id": bout_id})
+        if existing:
+            fighters = existing.get("fighters", {})
+            red_name = fighters.get("red", {}).get("fighter_name", "?")
+            blue_name = fighters.get("blue", {}).get("fighter_name", "?")
+            print(f"  Deleted cancelled bout {bout_id}: {red_name} vs {blue_name}")
+            bouts_col.delete_one({"_id": bout_id})
+            stats["bouts_deleted"] += 1
+        return False
+
+    existing = bouts_col.find_one({"_id": bout_id})
     bout_doc = transform_bout(item)
 
     if not existing:
@@ -475,6 +487,17 @@ def main():
     print(f"Starting UFC data ingestion...")
     print(f"Database: {DB_NAME}")
     print(f"Minimum date: {MIN_DATE}")
+
+    # Verificar que raw.jsonl existe y no es viejo
+    raw_file = "raw.jsonl"
+    if not os.path.exists(raw_file):
+        print("ERROR: raw.jsonl no existe. Ejecuta el scraper primero.")
+        return
+
+    file_age_minutes = (datetime.utcnow() - datetime.utcfromtimestamp(os.path.getmtime(raw_file))).total_seconds() / 60
+    if file_age_minutes > 60:
+        print(f"WARNING: raw.jsonl tiene {file_age_minutes:.0f} minutos de antigüedad.")
+        print("Puede contener data vieja. Ejecuta el scraper de nuevo para datos frescos.")
     print()
 
     valid_event_ids = set()

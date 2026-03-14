@@ -103,6 +103,11 @@ class MongoDBPipeline:
             self.logger.error(f"Bout missing bout_id or event_id: {item}")
             return
 
+        # Saltar bouts cancelados - no guardarlos en la DB
+        if item.get("cancelled") or item.get("status") == "cancelled":
+            spider.logger.info(f"Skipping cancelled bout: {bout_id}")
+            return
+
         # Convert IDs to int
         try:
             bout_id = int(bout_id)
