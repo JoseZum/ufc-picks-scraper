@@ -13,18 +13,20 @@ class UfcSpider(scrapy.Spider):
     # Esto evita scraping infinito de eventos historicos
     MIN_DATE = date(2026, 1, 1)
 
-    def __init__(self, EVENT_ID=None, MODE=None, SKIP_BOUT_DETAILS=None, *args, **kwargs):
+    def __init__(self, EVENT_ID=None, EVENT_URL=None, MODE=None, SKIP_BOUT_DETAILS=None, *args, **kwargs):
         super(UfcSpider, self).__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
+        self.target_event_url = EVENT_URL
         self.mode = MODE  # "descubrimiento" o "resultados"
         self.skip_bout_details = SKIP_BOUT_DETAILS == "true"  # Si es true, no sigue a paginas de peleas
         self.old_events_count = 0  # Contador de eventos viejos consecutivos
         self.MAX_OLD_EVENTS = 10   # Parar despues de N eventos viejos seguidos
 
-        if self.mode == "results" and self.target_event_id:
-            # URL directa a un evento específico para extraer resultados
+        if self.mode == "results" and (self.target_event_url or self.target_event_id):
+            # Tapology requiere el slug completo del evento. Si no lo tenemos,
+            # el path /events/<id> redirige al home y el scrape queda vacío.
             self.start_urls = [
-                f"https://www.tapology.com/fightcenter/events/{self.target_event_id}"
+                self.target_event_url or f"https://www.tapology.com/fightcenter/events/{self.target_event_id}"
             ]
         else:
             # Modo descubrimiento: rastrear eventos futuros/recientes de UFC
@@ -521,8 +523,11 @@ class UfcSpider(scrapy.Spider):
 
                 # Find category by joining middle cells
                 row_text = " ".join(cell_texts)
-                left_val = cell_texts[0]
-                right_val = cell_texts[-1]
+                non_empty_texts = [text for text in cell_texts if text]
+                if not non_empty_texts:
+                    continue
+                left_val = non_empty_texts[0]
+                right_val = non_empty_texts[-1]
 
                 # Pro Record At Fight
                 if "Pro Record At Fight" in row_text:
@@ -543,17 +548,16 @@ class UfcSpider(scrapy.Spider):
 
                 # Age at Fight
                 elif "Age at Fight" in row_text:
-                    for side, val in [("left", left_val), ("right", right_val)]:
-                        age_m = re.search(r'(\d+)\s+years?', val)
-                        months_m = re.search(r'(\d+)\s+months?', val)
-                        days_m = re.search(r'(\d+)\s+days?', val)
-                        weeks_m = re.search(r'(\d+)\s+weeks?', val)
-                        if age_m:
-                            comparison[side]["age_at_fight"] = {
-                                "years": int(age_m.group(1)),
-                                "months": int(months_m.group(1)) if months_m else 0,
-                                "days": int(days_m.group(1)) if days_m else (int(weeks_m.group(1)) * 7 if weeks_m else 0)
-                            }
+                    age_values = []
+                    for text in non_empty_texts:
+                        age_data = self._parse_age_at_fight(text)
+                        if age_data:
+                            age_values.append(age_data)
+
+                    if age_values:
+                        comparison["left"]["age_at_fight"] = age_values[0]
+                        if len(age_values) > 1:
+                            comparison["right"]["age_at_fight"] = age_values[-1]
 
                 # Nationality - clean the duplicated text
                 elif "Nationality" in row_text and "nationality" not in comparison["left"]:
@@ -655,6 +659,25 @@ class UfcSpider(scrapy.Spider):
                 seen.add(p)
                 unique.append(p)
         return unique[0] if unique else None
+
+    def _parse_age_at_fight(self, raw):
+        """Parse '37 years 4 months 2 days' age strings from comparison cells."""
+        if not raw:
+            return None
+
+        age_m = re.search(r'(\d+)\s+years?', raw)
+        if not age_m:
+            return None
+
+        months_m = re.search(r'(\d+)\s+months?', raw)
+        days_m = re.search(r'(\d+)\s+days?', raw)
+        weeks_m = re.search(r'(\d+)\s+weeks?', raw)
+
+        return {
+            "years": int(age_m.group(1)),
+            "months": int(months_m.group(1)) if months_m else 0,
+            "days": int(days_m.group(1)) if days_m else (int(weeks_m.group(1)) * 7 if weeks_m else 0)
+        }
 
     def _clean_location(self, raw):
         """Clean fighting_out_of from duplicated HTML text"""

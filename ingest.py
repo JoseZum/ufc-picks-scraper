@@ -155,6 +155,7 @@ def transform_event(item: dict) -> dict:
         "status": "scheduled",  # Will be updated when results come in
         "total_bouts": item.get("total_bouts") or 0,
         "main_event_bout_id": None,  # Set later
+        "poster_image_url": item.get("poster_image_url"),
         "scraped_at": now,
         "last_updated": now,
     }
@@ -272,18 +273,24 @@ def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None)
                 age_data = fighter_detail["age_at_fight"]
                 if isinstance(age_data, dict) and "years" in age_data:
                     fighter["age_at_fight_years"] = age_data["years"]
+            elif fighter_detail.get("age_at_fight_years"):
+                fighter["age_at_fight_years"] = fighter_detail["age_at_fight_years"]
 
             # Height (object with cm)
             if fighter_detail.get("height"):
                 height_data = fighter_detail["height"]
                 if isinstance(height_data, dict) and "cm" in height_data:
                     fighter["height_cm"] = height_data["cm"]
+            elif fighter_detail.get("height_cm") is not None:
+                fighter["height_cm"] = fighter_detail["height_cm"]
 
             # Reach (object with cm)
             if fighter_detail.get("reach"):
                 reach_data = fighter_detail["reach"]
                 if isinstance(reach_data, dict) and "cm" in reach_data:
                     fighter["reach_cm"] = reach_data["cm"]
+            elif fighter_detail.get("reach_cm") is not None:
+                fighter["reach_cm"] = fighter_detail["reach_cm"]
 
             # UFC Ranking (object with position and division)
             if fighter_detail.get("ufc_ranking"):

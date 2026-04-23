@@ -1,7 +1,9 @@
 """
-Spider de Backfill de Imágenes UFC
+Spider de Refresh de Imágenes UFC
 
-Este obtiene posters y headshots para completar registros existentes.
+Siempre re-scrapea TODOS los eventos y bouts y sobrescribe con el link
+más reciente encontrado en Tapology. Si la página no expone un poster
+o headshot válido, no se toca el valor previo en Mongo.
 
 Usage:
     scrapy crawl ufc_images                      # Ambos (posters + headshots)
@@ -14,7 +16,6 @@ import scrapy
 import re
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-from urllib.parse import urljoin
 
 
 class UfcImagesSpider(scrapy.Spider):
@@ -42,7 +43,7 @@ class UfcImagesSpider(scrapy.Spider):
         super(UfcImagesSpider, self).__init__(*args, **kwargs)
         self.mode = MODE  # 'events', 'bouts', o None (ambos)
         self.target_event_id = EVENT_ID
-        
+
         # MongoDB connection
         mongo_uri = os.getenv("MONGODB_URI")
 
@@ -51,7 +52,7 @@ class UfcImagesSpider(scrapy.Spider):
 
         self.mongo_client = AsyncIOMotorClient(mongo_uri)
         self.db = self.mongo_client.ufc_picks
-        
+
         self.logger.info(f"UFC Images Spider initialized - MODE: {self.mode or 'ALL'}")
         if self.target_event_id:
             self.logger.info(f"Targeting specific event: {self.target_event_id}")
@@ -74,15 +75,20 @@ class UfcImagesSpider(scrapy.Spider):
                 yield req
 
     async def load_events_from_mongo(self):
-        """Cargar eventos que necesitan poster_image_url"""
-        query = {"poster_image_url": None}
-        
+        """Cargar eventos para refrescar poster_image_url.
+
+        Siempre re-scrapea todos los eventos y sobrescribe con el link más
+        reciente de Tapology. Si la página no expone un poster legítimo,
+        parse_event_images simplemente no emite nada y el valor previo queda.
+        """
         if self.target_event_id:
-            query["event_id"] = int(self.target_event_id)
+            query = {"id": int(self.target_event_id)}
+        else:
+            query = {}
         
         try:
             events = await self.db.events.find(query).to_list(length=None)
-            self.logger.info(f"Found {len(events)} events without poster images")
+            self.logger.info(f"Found {len(events)} events to scrape for posters")
             
             for event in events:
                 tap_url = event.get("tapology_url") or event.get("url")
@@ -102,20 +108,18 @@ class UfcImagesSpider(scrapy.Spider):
             self.logger.error(f"Error loading events from Mongo: {e}")
 
     async def load_bouts_from_mongo(self):
-        """Cargar bouts que necesitan fighter headshots"""
-        query = {
-            "$or": [
-                {"fighters.red.profile_image_url": None},
-                {"fighters.blue.profile_image_url": None}
-            ]
-        }
-        
+        """Cargar bouts para refrescar fighter headshots.
+
+        Siempre re-scrapea; si Tapology no tiene headshots válidos
+        parse_bout_images no emite y se mantiene lo que ya había.
+        """
+        query = {}
         if self.target_event_id:
             query["event_id"] = int(self.target_event_id)
         
         try:
             bouts = await self.db.bouts.find(query).to_list(length=None)
-            self.logger.info(f"📊 Found {len(bouts)} bouts without fighter images")
+            self.logger.info(f"Found {len(bouts)} bouts to scrape for fighter images")
             
             for bout in bouts:
                 tap_url = bout.get("tapology_url") or bout.get("url")
@@ -145,8 +149,8 @@ class UfcImagesSpider(scrapy.Spider):
             self.logger.warning(f"No poster found for event {event_id}")
             return
         
-        # Tomar la primera imagen de poster encontrada
-        raw_url = poster_imgs[0]
+        # Tapology a veces deja varias versiones en el HTML. Priorizamos la ultima.
+        raw_url = poster_imgs[-1]
         
         # Normalizar a formato proxy
         # De: https://images.tapology.com/poster_images/135755/profile/xxx.jpg
@@ -270,8 +274,10 @@ class UfcImagesPipeline:
             
             if result.modified_count > 0:
                 spider.logger.info(f"Updated event {item['event_id']} poster")
+            elif result.matched_count > 0:
+                spider.logger.info(f"Event {item['event_id']} poster already up to date")
             else:
-                spider.logger.warning(f"Event {item['event_id']} not updated (already had poster or not found)")
+                spider.logger.warning(f"Event {item['event_id']} not found while updating poster")
         
         elif item.get("type") == "bout_fighters":
             # Actualizar headshots de fighters
@@ -287,8 +293,10 @@ class UfcImagesPipeline:
             
             if result.modified_count > 0:
                 spider.logger.info(f"Updated bout {item['bout_id']} fighter images")
+            elif result.matched_count > 0:
+                spider.logger.info(f"Bout {item['bout_id']} fighter images already up to date")
             else:
-                spider.logger.warning(f"Bout {item['bout_id']} not updated (already had images or not found)")
+                spider.logger.warning(f"Bout {item['bout_id']} not found while updating fighter images")
         
         return item
 

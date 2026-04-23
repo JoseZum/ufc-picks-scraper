@@ -80,12 +80,17 @@ for event in events.find({"status": "upcoming"}):
                 os.remove(raw_file)
 
             # Ejecutar scraper
-            subprocess.run([
+            event_url = event.get("url") or event.get("tapology_url")
+            scrapy_command = [
                 "scrapy", "crawl", "ufc",
                 "-a", f"EVENT_ID={event['_id']}",
                 "-a", "MODE=results",
-                "-o", raw_file
-            ], check=True)
+            ]
+            if event_url:
+                scrapy_command.extend(["-a", f"EVENT_URL={event_url}"])
+            scrapy_command.extend(["-o", raw_file])
+
+            subprocess.run(scrapy_command, check=True)
 
             # Ingerir en MongoDB
             print(f"Ingiriendo resultados...")

@@ -96,7 +96,7 @@ class S3Service:
         """
         Genera la key S3 para la imagen de un peleador
 
-        Naming convention:
+        Convención de nombres:
         - fighters/{fighter_id}.jpg
         - Ejemplo: fighters/123456.jpg
 

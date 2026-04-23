@@ -1,0 +1,2075 @@
+{
+  "generated_at": "2026-03-21T01:27:09.348669",
+  "counts": {
+    "raw_items": 25,
+    "events": 1,
+    "bouts": 12,
+    "bout_details": 12
+  },
+  "events": [
+    {
+      "_id": 136871,
+      "id": 136871,
+      "source": "tapology",
+      "promotion": "UFC",
+      "name": "UFC 326: Holloway vs. Oliveira 2",
+      "subtitle": null,
+      "slug": "ufc-326-holloway-vs-oliveira-2",
+      "url": "https://www.tapology.com/fightcenter/events/136871-ufc-326-holloway-vs-oliveira-2",
+      "date": "2026-03-07T00:00:00",
+      "start_time_et": "17:30",
+      "event_type": "numbered",
+      "timezone": "ET",
+      "location": {
+        "venue": "T-Mobile Arena",
+        "city": null,
+        "country": null
+      },
+      "status": "scheduled",
+      "total_bouts": 12,
+      "main_event_bout_id": null,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    }
+  ],
+  "bouts": [
+    {
+      "_id": 1077636,
+      "id": 1077636,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1077636-ufc-326-max-blessed-holloway-vs-charles-do-bronxs-oliveira-ii",
+      "slug": "ufc-326-max-blessed-holloway-vs-charles-do-bronxs-oliveira-ii",
+      "weight_class": "155 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Charles Oliveira",
+          "corner": "red",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 36,
+            "losses": 11,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Sao Paulo, Brazil",
+          "ranking": null,
+          "age_at_fight_years": 36,
+          "height_cm": 178,
+          "reach_cm": 188,
+          "tapology_id": "charles-oliveira-do-bronx",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/charles-oliveira-do-bronx",
+          "gym": {
+            "primary": "Chute Boxe Diego Lima",
+            "other": [
+              "Gold Team Texas"
+            ]
+          },
+          "betting_odds": {
+            "line": "+170",
+            "description": "Slight Underdog"
+          }
+        },
+        "blue": {
+          "fighter_name": "Max Holloway",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 27,
+            "losses": 8,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Waianae, Hawaii",
+          "ranking": null,
+          "age_at_fight_years": 34,
+          "height_cm": 180,
+          "reach_cm": 175,
+          "tapology_id": "12723",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/12723-max-holloway-lil-evil",
+          "gym": {
+            "primary": "Gracie Technics",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-210",
+            "description": "Moderate Favorite"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "main",
+      "card_order": 1,
+      "is_main_event": true,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1082649,
+      "id": 1082649,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1082649-ufc-326-cody-custom-made-durden-vs-nyamjargal-art-of-knockout-tumendemberel",
+      "slug": "ufc-326-cody-custom-made-durden-vs-nyamjargal-art-of-knockout-tumendemberel",
+      "weight_class": "125 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "N. Tumendemberel",
+          "corner": "red",
+          "nationality": "Mongolia",
+          "record_at_fight": {
+            "wins": 9,
+            "losses": 1,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Ulaanbaatar, Mongolia",
+          "ranking": null,
+          "age_at_fight_years": 27,
+          "height_cm": 170,
+          "reach_cm": 180,
+          "tapology_id": "304338",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/304338-nyamjargal-tumendemberel",
+          "gym": {
+            "primary": "Shandas MMA",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-175",
+            "description": "Slight Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Cody Durden",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 17,
+            "losses": 9,
+            "draws": 1
+          },
+          "last_fights": [],
+          "fighting_out_of": "Atlanta, Georgia, United States",
+          "ranking": null,
+          "age_at_fight_years": 34,
+          "height_cm": 170,
+          "reach_cm": 170,
+          "tapology_id": "68337",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/68337-cody-durden",
+          "gym": {
+            "primary": "American Top Team Atlanta",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+145",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 4,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1082878,
+      "id": 1082878,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1082878-ufc-326-caio-the-natural-borralho-vs-reinier-rdr-de-ridder",
+      "slug": "ufc-326-caio-the-natural-borralho-vs-reinier-rdr-de-ridder",
+      "weight_class": "185 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Caio Borralho",
+          "corner": "red",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 17,
+            "losses": 2,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Sao Paulo, Sao Paulo, Brazil",
+          "ranking": null,
+          "age_at_fight_years": 33,
+          "height_cm": 187,
+          "reach_cm": 191,
+          "tapology_id": "107316",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/107316-caio-borralho-cara-de-kombi",
+          "gym": {
+            "primary": "Fighting Nerds",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Reinier de Ridder",
+          "corner": "blue",
+          "nationality": "Netherlands",
+          "record_at_fight": {
+            "wins": 21,
+            "losses": 3,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Breda, Netherlands",
+          "ranking": null,
+          "age_at_fight_years": 35,
+          "height_cm": 193,
+          "reach_cm": 198,
+          "tapology_id": "49983",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/49983-reinier-de-ridder",
+          "gym": {
+            "primary": "Combat Brothers",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+185",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "main",
+      "card_order": null,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1082880,
+      "id": 1082880,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1082880-ufc-326-cody-no-love-garbrandt-vs-long-xiao",
+      "slug": "ufc-326-cody-no-love-garbrandt-vs-long-xiao",
+      "weight_class": "135 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Cody Garbrandt",
+          "corner": "red",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 14,
+            "losses": 7,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Sacramento, California, United States",
+          "ranking": null,
+          "age_at_fight_years": 34,
+          "height_cm": 173,
+          "reach_cm": 166,
+          "tapology_id": "21780",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/21780-cody-garbrandt-no-love",
+          "gym": {
+            "primary": "Team Alpha Male",
+            "other": [
+              "Strong Style Fight Team"
+            ]
+          },
+          "betting_odds": {
+            "line": "+135",
+            "description": "Slight Underdog"
+          }
+        },
+        "blue": {
+          "fighter_name": "Long Xiao",
+          "corner": "blue",
+          "nationality": "China",
+          "record_at_fight": {
+            "wins": 27,
+            "losses": 10,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Shanghai, China",
+          "ranking": null,
+          "age_at_fight_years": 27,
+          "height_cm": 172,
+          "reach_cm": 178,
+          "tapology_id": "130852",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/130852-long-xiao",
+          "gym": {
+            "primary": "Shanxi Xindu Martial Arts Club",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-160",
+            "description": "Slight Favorite"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 1,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1082884,
+      "id": 1082884,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1082884-ufc-326-rafael-bipolar-tobias-vs-diyar-nurgozhay",
+      "slug": "ufc-326-rafael-bipolar-tobias-vs-diyar-nurgozhay",
+      "weight_class": "205 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Diyar Nurgozhay",
+          "corner": "red",
+          "nationality": "Kazakhstan",
+          "record_at_fight": {
+            "wins": 10,
+            "losses": 2,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Astana, Kazakhstan",
+          "ranking": null,
+          "age_at_fight_years": 28,
+          "height_cm": 189,
+          "reach_cm": 188,
+          "tapology_id": "181154",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/181154-diyar-nurkozhay",
+          "gym": {
+            "primary": "Arlan MMA Pro Team",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+140",
+            "description": "Slight Underdog"
+          }
+        },
+        "blue": {
+          "fighter_name": "Rafael Tobias",
+          "corner": "blue",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 14,
+            "losses": 1,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Curitiba, Paraná, Brazil",
+          "ranking": null,
+          "age_at_fight_years": 22,
+          "height_cm": 188,
+          "reach_cm": 189,
+          "tapology_id": "332548",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/332548-rafael-tobias-bipolar",
+          "gym": {
+            "primary": "Chute Boxe Monstro",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-175",
+            "description": "Slight Favorite"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 6,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1083590,
+      "id": 1083590,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1083590-ufc-326-the-tibetan-eagle-sumudaerji-vs-jesus-aguilar",
+      "slug": "ufc-326-the-tibetan-eagle-sumudaerji-vs-jesus-aguilar",
+      "weight_class": "125 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Sumudaerji",
+          "corner": "red",
+          "nationality": "China",
+          "record_at_fight": {
+            "wins": 18,
+            "losses": 7,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Sacramento, California, United States",
+          "ranking": null,
+          "age_at_fight_years": 30,
+          "height_cm": 173,
+          "reach_cm": 183,
+          "tapology_id": "130802",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/130802-sumidaerji",
+          "gym": {
+            "primary": "Enbo Fight Club",
+            "other": [
+              "Team Alpha Male"
+            ]
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Jesus Aguilar",
+          "corner": "blue",
+          "nationality": "Mexico",
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 3,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Baja California, Mexico",
+          "ranking": null,
+          "age_at_fight_years": 29,
+          "height_cm": 163,
+          "reach_cm": 159,
+          "tapology_id": "108511",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/108511-jesus-aguilar",
+          "gym": {
+            "primary": "AVT",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+180",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 5,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1088759,
+      "id": 1088759,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1088759-ufc-326-luke-fernandez-vs-rodolfo-trator-bellato",
+      "slug": "ufc-326-luke-fernandez-vs-rodolfo-trator-bellato",
+      "weight_class": "205 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Rodolfo Bellato",
+          "corner": "red",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 3,
+            "draws": 1
+          },
+          "last_fights": [],
+          "fighting_out_of": "Rio de Janeiro, Rio de Janeiro, Brazil",
+          "ranking": null,
+          "age_at_fight_years": 30,
+          "height_cm": 191,
+          "reach_cm": 197,
+          "tapology_id": "76570",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/76570-rodolfo-bellato",
+          "gym": {
+            "primary": "KO Squad MMA",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+180",
+            "description": "Slight Underdog"
+          }
+        },
+        "blue": {
+          "fighter_name": "Luke Fernandez",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 6,
+            "losses": 0,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Lacey Township, New Jersey, United States",
+          "ranking": null,
+          "age_at_fight_years": 30,
+          "height_cm": 187,
+          "reach_cm": 193,
+          "tapology_id": "274236",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/274236-luke-fernandez",
+          "gym": {
+            "primary": "Dante Rivera BJJ",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 7,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1090377,
+      "id": 1090377,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1090377-ufc-326-rob-font-vs-raul-el-nino-problema-rosas-jr",
+      "slug": "ufc-326-rob-font-vs-raul-el-nino-problema-rosas-jr",
+      "weight_class": "135 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Raul Rosas Jr.",
+          "corner": "red",
+          "nationality": "Mexico",
+          "record_at_fight": {
+            "wins": 11,
+            "losses": 1,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Santa Rosa, California, United States",
+          "ranking": null,
+          "age_at_fight_years": 21,
+          "height_cm": 175,
+          "reach_cm": 170,
+          "tapology_id": "94654",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/94654-raul-rosas",
+          "gym": {
+            "primary": "N/A",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-310",
+            "description": "Moderate Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Rob Font",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 22,
+            "losses": 9,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Boston, Massachusetts",
+          "ranking": null,
+          "age_at_fight_years": 38,
+          "height_cm": 173,
+          "reach_cm": 182,
+          "tapology_id": "rob-font",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/rob-font",
+          "gym": {
+            "primary": "New England Cartel",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+255",
+            "description": "Moderate Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "main",
+      "card_order": 2,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1090778,
+      "id": 1090778,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1090778-ufc-326-gregory-robocop-rodrigues-vs-brunno-the-hulk-ferreira",
+      "slug": "ufc-326-gregory-robocop-rodrigues-vs-brunno-the-hulk-ferreira",
+      "weight_class": "185 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Gregory Rodrigues",
+          "corner": "red",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 18,
+            "losses": 6,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Deerfield Beach, Florida, United States",
+          "ranking": null,
+          "age_at_fight_years": 34,
+          "height_cm": 191,
+          "reach_cm": 191,
+          "tapology_id": "78681",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/78681-gregory-rodrigues-robocop",
+          "gym": {
+            "primary": "XGym",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-160",
+            "description": "Slight Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Brunno Ferreira",
+          "corner": "blue",
+          "nationality": "Brazil",
+          "record_at_fight": {
+            "wins": 15,
+            "losses": 2,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Curitiba, Parana, Brazil",
+          "ranking": null,
+          "age_at_fight_years": 33,
+          "height_cm": 179,
+          "reach_cm": 183,
+          "tapology_id": "218790",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/218790-bruno-the-hulk",
+          "gym": {
+            "primary": "Brazilian TKO",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+135",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "main",
+      "card_order": 4,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1099700,
+      "id": 1099700,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1099700-ufc-326-alberto-the-promise-montes-vs-ricky-turcios",
+      "slug": "ufc-326-alberto-the-promise-montes-vs-ricky-turcios",
+      "weight_class": "145 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Alberto Montes",
+          "corner": "red",
+          "nationality": "Venezuela",
+          "record_at_fight": {
+            "wins": 10,
+            "losses": 1,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Miami, Florida, United States",
+          "ranking": null,
+          "age_at_fight_years": 31,
+          "height_cm": 170,
+          "reach_cm": 175,
+          "tapology_id": "162516",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/162516-alberto-montes-the-promise",
+          "gym": {
+            "primary": "The Goat Shed",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-180",
+            "description": "Slight Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Ricky Turcios",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 5,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Houston, Texas, United States",
+          "ranking": null,
+          "age_at_fight_years": 32,
+          "height_cm": 175,
+          "reach_cm": 180,
+          "tapology_id": "46586",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/46586-ricky-turcios",
+          "gym": {
+            "primary": "Team Alpha Male",
+            "other": [
+              "Gracie Barra The Woodlands"
+            ]
+          },
+          "betting_odds": {
+            "line": "+155",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 3,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1102226,
+      "id": 1102226,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1102226-ufc-326-drew-dober-vs-michael-the-menace-johnson",
+      "slug": "ufc-326-drew-dober-vs-michael-the-menace-johnson",
+      "weight_class": "155 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Drew Dober",
+          "corner": "red",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 28,
+            "losses": 15,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Denver, Colorado",
+          "ranking": null,
+          "age_at_fight_years": 37,
+          "height_cm": 173,
+          "reach_cm": 178,
+          "tapology_id": "drew-dober",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/drew-dober",
+          "gym": {
+            "primary": "N/A",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-205",
+            "description": "Moderate Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Michael Johnson",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 24,
+            "losses": 19,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Boca Raton, Florida",
+          "ranking": null,
+          "age_at_fight_years": 39,
+          "height_cm": 178,
+          "reach_cm": 187,
+          "tapology_id": "michael-johnson-the-menace",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/michael-johnson-the-menace",
+          "gym": {
+            "primary": "Kill Cliff FC",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+175",
+            "description": "Slight Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "main",
+      "card_order": 3,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    },
+    {
+      "_id": 1103052,
+      "id": 1103052,
+      "event_id": 136871,
+      "source": "tapology",
+      "url": "https://www.tapology.com/fightcenter/bouts/1103052-ufc-326-donte-lock-jaw-johnson-vs-cody-brundage",
+      "slug": "ufc-326-donte-lock-jaw-johnson-vs-cody-brundage",
+      "weight_class": "185 lbs",
+      "gender": "male",
+      "rounds_scheduled": 3,
+      "is_title_fight": false,
+      "status": "scheduled",
+      "fighters": {
+        "red": {
+          "fighter_name": "Donte Johnson",
+          "corner": "red",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 7,
+            "losses": 0,
+            "draws": 0
+          },
+          "last_fights": [],
+          "fighting_out_of": "Fond du Lac, Wisconsin, United States",
+          "ranking": null,
+          "age_at_fight_years": 27,
+          "height_cm": 173,
+          "reach_cm": 188,
+          "tapology_id": "342862",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/342862-donte-johnson",
+          "gym": {
+            "primary": "Gnosis Combat Sports",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "-845",
+            "description": "Huge Favorite"
+          }
+        },
+        "blue": {
+          "fighter_name": "Cody Brundage",
+          "corner": "blue",
+          "nationality": "United States",
+          "record_at_fight": {
+            "wins": 11,
+            "losses": 8,
+            "draws": 1
+          },
+          "last_fights": [],
+          "fighting_out_of": "Englewood, Colorado, United States",
+          "ranking": null,
+          "age_at_fight_years": 31,
+          "height_cm": 183,
+          "reach_cm": 183,
+          "tapology_id": "169818",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/169818-cody-brundage",
+          "gym": {
+            "primary": "factoryX Muay Thai",
+            "other": []
+          },
+          "betting_odds": {
+            "line": "+575",
+            "description": "Heavy Underdog"
+          }
+        }
+      },
+      "result": null,
+      "card_section": "prelim",
+      "card_order": 2,
+      "is_main_event": false,
+      "is_co_main_event": false,
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "last_updated": "2026-03-21T01:27:09.348669"
+    }
+  ],
+  "bout_details": [
+    {
+      "_id": 1077636,
+      "bout_id": 1077636,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Main Card",
+      "weight_info": "155 lbs (70.3 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Charles Oliveira",
+          "tapology_id": "charles-oliveira-do-bronx",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/charles-oliveira-do-bronx",
+          "nickname": "do Bronxs",
+          "nationality": "Brazil",
+          "fighting_out_of": "Sao Paulo, Brazil",
+          "age_at_fight_years": 36,
+          "age_at_fight": {
+            "years": 36,
+            "months": 4,
+            "days": 4
+          },
+          "height_cm": 178,
+          "height": {
+            "feet": 5,
+            "inches": 10,
+            "cm": 178
+          },
+          "reach_cm": 188,
+          "reach": {
+            "inches": 74.0,
+            "cm": 188
+          },
+          "latest_weight": {
+            "lbs": 156.0,
+            "kgs": 70.8
+          },
+          "record_at_fight": {
+            "wins": 36,
+            "losses": 11,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+170",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Chute Boxe Diego Lima",
+            "other": [
+              "Gold Team Texas"
+            ]
+          }
+        },
+        "blue": {
+          "fighter_name": "Max Holloway",
+          "tapology_id": "12723",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/12723-max-holloway-lil-evil",
+          "nickname": "Blessed",
+          "nationality": "United States",
+          "fighting_out_of": "Waianae, Hawaii",
+          "age_at_fight_years": 34,
+          "age_at_fight": {
+            "years": 34,
+            "months": 3,
+            "days": 3
+          },
+          "height_cm": 180,
+          "height": {
+            "feet": 5,
+            "inches": 11,
+            "cm": 180
+          },
+          "reach_cm": 175,
+          "reach": {
+            "inches": 69.0,
+            "cm": 175
+          },
+          "latest_weight": {
+            "lbs": 155.0,
+            "kgs": 70.3
+          },
+          "record_at_fight": {
+            "wins": 27,
+            "losses": 8,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-210",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "Gracie Technics",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1082649,
+      "bout_id": 1082649,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "125 lbs (56.7 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "N. Tumendemberel",
+          "tapology_id": "304338",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/304338-nyamjargal-tumendemberel",
+          "nickname": "Art of Knockout",
+          "nationality": "Mongolia",
+          "fighting_out_of": "Ulaanbaatar, Mongolia",
+          "age_at_fight_years": 27,
+          "age_at_fight": {
+            "years": 27,
+            "months": 11,
+            "days": 6
+          },
+          "height_cm": 170,
+          "height": {
+            "feet": 5,
+            "inches": 7,
+            "cm": 170
+          },
+          "reach_cm": 180,
+          "reach": {
+            "inches": 71.0,
+            "cm": 180
+          },
+          "latest_weight": {
+            "lbs": 125.5,
+            "kgs": 56.9
+          },
+          "record_at_fight": {
+            "wins": 9,
+            "losses": 1,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-175",
+            "description": "Slight Favorite"
+          },
+          "gym": {
+            "primary": "Shandas MMA",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Cody Durden",
+          "tapology_id": "68337",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/68337-cody-durden",
+          "nickname": "Custom Made",
+          "nationality": "United States",
+          "fighting_out_of": "Atlanta, Georgia, United States",
+          "age_at_fight_years": 34,
+          "age_at_fight": {
+            "years": 34,
+            "months": 11,
+            "days": 6
+          },
+          "height_cm": 170,
+          "height": {
+            "feet": 5,
+            "inches": 7,
+            "cm": 170
+          },
+          "reach_cm": 170,
+          "reach": {
+            "inches": 67.0,
+            "cm": 170
+          },
+          "latest_weight": {
+            "lbs": 125.5,
+            "kgs": 56.9
+          },
+          "record_at_fight": {
+            "wins": 17,
+            "losses": 9,
+            "draws": 1
+          },
+          "betting_odds": {
+            "line": "+145",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "American Top Team Atlanta",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1082878,
+      "bout_id": 1082878,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Main Card",
+      "weight_info": "185 lbs (83.9 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Caio Borralho",
+          "tapology_id": "107316",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/107316-caio-borralho-cara-de-kombi",
+          "nickname": "The Natural",
+          "nationality": "Brazil",
+          "fighting_out_of": "Sao Paulo, Sao Paulo, Brazil",
+          "age_at_fight_years": 33,
+          "age_at_fight": {
+            "years": 33,
+            "months": 1,
+            "days": 5
+          },
+          "height_cm": 187,
+          "height": {
+            "feet": 6,
+            "inches": 1,
+            "cm": 187
+          },
+          "reach_cm": 191,
+          "reach": {
+            "inches": 75.0,
+            "cm": 191
+          },
+          "latest_weight": {
+            "lbs": 186.0,
+            "kgs": 84.4
+          },
+          "record_at_fight": {
+            "wins": 17,
+            "losses": 2,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "Fighting Nerds",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Reinier de Ridder",
+          "tapology_id": "49983",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/49983-reinier-de-ridder",
+          "nickname": "RDR",
+          "nationality": "Netherlands",
+          "fighting_out_of": "Breda, Netherlands",
+          "age_at_fight_years": 35,
+          "age_at_fight": {
+            "years": 35,
+            "months": 6,
+            "days": 0
+          },
+          "height_cm": 193,
+          "height": {
+            "feet": 6,
+            "inches": 4,
+            "cm": 193
+          },
+          "reach_cm": 198,
+          "reach": {
+            "inches": 78.0,
+            "cm": 198
+          },
+          "latest_weight": {
+            "lbs": 185.5,
+            "kgs": 84.1
+          },
+          "record_at_fight": {
+            "wins": 21,
+            "losses": 3,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+185",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Combat Brothers",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1082880,
+      "bout_id": 1082880,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "135 lbs (61.2 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Cody Garbrandt",
+          "tapology_id": "21780",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/21780-cody-garbrandt-no-love",
+          "nickname": "No Love",
+          "nationality": "United States",
+          "fighting_out_of": "Sacramento, California, United States",
+          "age_at_fight_years": 34,
+          "age_at_fight": {
+            "years": 34,
+            "months": 8,
+            "days": 0
+          },
+          "height_cm": 173,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 173
+          },
+          "reach_cm": 166,
+          "reach": {
+            "inches": 65.5,
+            "cm": 166
+          },
+          "latest_weight": {
+            "lbs": 136.0,
+            "kgs": 61.7
+          },
+          "record_at_fight": {
+            "wins": 14,
+            "losses": 7,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+135",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Team Alpha Male",
+            "other": [
+              "Strong Style Fight Team"
+            ]
+          }
+        },
+        "blue": {
+          "fighter_name": "Long Xiao",
+          "tapology_id": "130852",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/130852-long-xiao",
+          "nationality": "China",
+          "fighting_out_of": "Shanghai, China",
+          "age_at_fight_years": 27,
+          "age_at_fight": {
+            "years": 27,
+            "months": 10,
+            "days": 1
+          },
+          "height_cm": 172,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 172
+          },
+          "reach_cm": 178,
+          "reach": {
+            "inches": 70.0,
+            "cm": 178
+          },
+          "latest_weight": {
+            "lbs": 135.5,
+            "kgs": 61.5
+          },
+          "record_at_fight": {
+            "wins": 27,
+            "losses": 10,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-160",
+            "description": "Slight Favorite"
+          },
+          "gym": {
+            "primary": "Shanxi Xindu Martial Arts Club",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1082884,
+      "bout_id": 1082884,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "205 lbs (93.0 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Diyar Nurgozhay",
+          "tapology_id": "181154",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/181154-diyar-nurkozhay",
+          "nickname": "Bipolar",
+          "nationality": "Kazakhstan",
+          "fighting_out_of": "Astana, Kazakhstan",
+          "age_at_fight_years": 28,
+          "age_at_fight": {
+            "years": 28,
+            "months": 10,
+            "days": 6
+          },
+          "height_cm": 189,
+          "height": {
+            "feet": 6,
+            "inches": 2,
+            "cm": 189
+          },
+          "reach_cm": 188,
+          "reach": {
+            "inches": 74.0,
+            "cm": 188
+          },
+          "latest_weight": {
+            "lbs": 205.5,
+            "kgs": 93.2
+          },
+          "record_at_fight": {
+            "wins": 10,
+            "losses": 2,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+140",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Arlan MMA Pro Team",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Rafael Tobias",
+          "tapology_id": "332548",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/332548-rafael-tobias-bipolar",
+          "nationality": "Brazil",
+          "fighting_out_of": "Curitiba, Paraná, Brazil",
+          "age_at_fight_years": 22,
+          "age_at_fight": {
+            "years": 22,
+            "months": 11,
+            "days": 1
+          },
+          "height_cm": 188,
+          "height": {
+            "feet": 6,
+            "inches": 2,
+            "cm": 188
+          },
+          "reach_cm": 189,
+          "reach": {
+            "inches": 74.5,
+            "cm": 189
+          },
+          "latest_weight": {
+            "lbs": 204.0,
+            "kgs": 92.5
+          },
+          "record_at_fight": {
+            "wins": 14,
+            "losses": 1,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-175",
+            "description": "Slight Favorite"
+          },
+          "gym": {
+            "primary": "Chute Boxe Monstro",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1083590,
+      "bout_id": 1083590,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "125 lbs (56.7 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Sumudaerji",
+          "tapology_id": "130802",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/130802-sumidaerji",
+          "nickname": "The Tibetan Eagle",
+          "nationality": "China",
+          "fighting_out_of": "Sacramento, California, United States",
+          "age_at_fight_years": 30,
+          "age_at_fight": {
+            "years": 30,
+            "months": 1,
+            "days": 1
+          },
+          "height_cm": 173,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 173
+          },
+          "reach_cm": 183,
+          "reach": {
+            "inches": 72.0,
+            "cm": 183
+          },
+          "latest_weight": {
+            "lbs": 126.0,
+            "kgs": 57.2
+          },
+          "record_at_fight": {
+            "wins": 18,
+            "losses": 7,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "Enbo Fight Club",
+            "other": [
+              "Team Alpha Male"
+            ]
+          }
+        },
+        "blue": {
+          "fighter_name": "Jesus Aguilar",
+          "tapology_id": "108511",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/108511-jesus-aguilar",
+          "nationality": "Mexico",
+          "fighting_out_of": "Baja California, Mexico",
+          "age_at_fight_years": 29,
+          "age_at_fight": {
+            "years": 29,
+            "months": 11,
+            "days": 1
+          },
+          "height_cm": 163,
+          "height": {
+            "feet": 5,
+            "inches": 4,
+            "cm": 163
+          },
+          "reach_cm": 159,
+          "reach": {
+            "inches": 62.5,
+            "cm": 159
+          },
+          "latest_weight": {
+            "lbs": 125.5,
+            "kgs": 56.9
+          },
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 3,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+180",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "AVT",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1088759,
+      "bout_id": 1088759,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "205 lbs (93.0 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Rodolfo Bellato",
+          "tapology_id": "76570",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/76570-rodolfo-bellato",
+          "nickname": "Trator",
+          "nationality": "Brazil",
+          "fighting_out_of": "Rio de Janeiro, Rio de Janeiro, Brazil",
+          "age_at_fight_years": 30,
+          "age_at_fight": {
+            "years": 30,
+            "months": 1,
+            "days": 2
+          },
+          "height_cm": 191,
+          "height": {
+            "feet": 6,
+            "inches": 3,
+            "cm": 191
+          },
+          "reach_cm": 197,
+          "reach": {
+            "inches": 77.5,
+            "cm": 197
+          },
+          "latest_weight": {
+            "lbs": 204.5,
+            "kgs": 92.8
+          },
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 3,
+            "draws": 1
+          },
+          "betting_odds": {
+            "line": "+180",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "KO Squad MMA",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Luke Fernandez",
+          "tapology_id": "274236",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/274236-luke-fernandez",
+          "nationality": "United States",
+          "fighting_out_of": "Lacey Township, New Jersey, United States",
+          "age_at_fight_years": 30,
+          "age_at_fight": {
+            "years": 30,
+            "months": 8,
+            "days": 6
+          },
+          "height_cm": 187,
+          "height": {
+            "feet": 6,
+            "inches": 1,
+            "cm": 187
+          },
+          "reach_cm": 193,
+          "reach": {
+            "inches": 76.0,
+            "cm": 193
+          },
+          "latest_weight": {
+            "lbs": 205.0,
+            "kgs": 93.0
+          },
+          "record_at_fight": {
+            "wins": 6,
+            "losses": 0,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-220",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "Dante Rivera BJJ",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1090377,
+      "bout_id": 1090377,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Main Card",
+      "weight_info": "135 lbs (61.2 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Raul Rosas Jr.",
+          "tapology_id": "94654",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/94654-raul-rosas",
+          "nickname": "El Niño Problema",
+          "nationality": "Mexico",
+          "fighting_out_of": "Santa Rosa, California, United States",
+          "age_at_fight_years": 21,
+          "age_at_fight": {
+            "years": 21,
+            "months": 4,
+            "days": 6
+          },
+          "height_cm": 175,
+          "height": {
+            "feet": 5,
+            "inches": 9,
+            "cm": 175
+          },
+          "reach_cm": 170,
+          "reach": {
+            "inches": 67.0,
+            "cm": 170
+          },
+          "latest_weight": {
+            "lbs": 135.5,
+            "kgs": 61.5
+          },
+          "record_at_fight": {
+            "wins": 11,
+            "losses": 1,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-310",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "N/A",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Rob Font",
+          "tapology_id": "rob-font",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/rob-font",
+          "nationality": "United States",
+          "fighting_out_of": "Boston, Massachusetts",
+          "age_at_fight_years": 38,
+          "age_at_fight": {
+            "years": 38,
+            "months": 8,
+            "days": 3
+          },
+          "height_cm": 173,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 173
+          },
+          "reach_cm": 182,
+          "reach": {
+            "inches": 71.5,
+            "cm": 182
+          },
+          "latest_weight": {
+            "lbs": 136.0,
+            "kgs": 61.7
+          },
+          "record_at_fight": {
+            "wins": 22,
+            "losses": 9,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+255",
+            "description": "Moderate Underdog"
+          },
+          "gym": {
+            "primary": "New England Cartel",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1090778,
+      "bout_id": 1090778,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Main Card",
+      "weight_info": "185 lbs (83.9 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Gregory Rodrigues",
+          "tapology_id": "78681",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/78681-gregory-rodrigues-robocop",
+          "nickname": "Robocop",
+          "nationality": "Brazil",
+          "fighting_out_of": "Deerfield Beach, Florida, United States",
+          "age_at_fight_years": 34,
+          "age_at_fight": {
+            "years": 34,
+            "months": 0,
+            "days": 4
+          },
+          "height_cm": 191,
+          "height": {
+            "feet": 6,
+            "inches": 3,
+            "cm": 191
+          },
+          "reach_cm": 191,
+          "reach": {
+            "inches": 75.0,
+            "cm": 191
+          },
+          "latest_weight": {
+            "lbs": 186.0,
+            "kgs": 84.4
+          },
+          "record_at_fight": {
+            "wins": 18,
+            "losses": 6,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-160",
+            "description": "Slight Favorite"
+          },
+          "gym": {
+            "primary": "XGym",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Brunno Ferreira",
+          "tapology_id": "218790",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/218790-bruno-the-hulk",
+          "nickname": "The Hulk",
+          "nationality": "Brazil",
+          "fighting_out_of": "Curitiba, Parana, Brazil",
+          "age_at_fight_years": 33,
+          "age_at_fight": {
+            "years": 33,
+            "months": 4,
+            "days": 3
+          },
+          "height_cm": 179,
+          "height": {
+            "feet": 5,
+            "inches": 10,
+            "cm": 179
+          },
+          "reach_cm": 183,
+          "reach": {
+            "inches": 72.0,
+            "cm": 183
+          },
+          "latest_weight": {
+            "lbs": 184.0,
+            "kgs": 83.5
+          },
+          "record_at_fight": {
+            "wins": 15,
+            "losses": 2,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+135",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Brazilian TKO",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1099700,
+      "bout_id": 1099700,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "145 lbs (65.8 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Alberto Montes",
+          "tapology_id": "162516",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/162516-alberto-montes-the-promise",
+          "nickname": "The Promise",
+          "nationality": "Venezuela",
+          "fighting_out_of": "Miami, Florida, United States",
+          "age_at_fight_years": 31,
+          "age_at_fight": {
+            "years": 31,
+            "months": 9,
+            "days": 4
+          },
+          "height_cm": 170,
+          "height": {
+            "feet": 5,
+            "inches": 7,
+            "cm": 170
+          },
+          "reach_cm": 175,
+          "reach": {
+            "inches": 69.0,
+            "cm": 175
+          },
+          "latest_weight": {
+            "lbs": 145.5,
+            "kgs": 66.0
+          },
+          "record_at_fight": {
+            "wins": 10,
+            "losses": 1,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-180",
+            "description": "Slight Favorite"
+          },
+          "gym": {
+            "primary": "The Goat Shed",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Ricky Turcios",
+          "tapology_id": "46586",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/46586-ricky-turcios",
+          "nationality": "United States",
+          "fighting_out_of": "Houston, Texas, United States",
+          "age_at_fight_years": 32,
+          "age_at_fight": {
+            "years": 32,
+            "months": 9,
+            "days": 2
+          },
+          "height_cm": 175,
+          "height": {
+            "feet": 5,
+            "inches": 9,
+            "cm": 175
+          },
+          "reach_cm": 180,
+          "reach": {
+            "inches": 71.0,
+            "cm": 180
+          },
+          "latest_weight": {
+            "lbs": 146.0,
+            "kgs": 66.2
+          },
+          "record_at_fight": {
+            "wins": 12,
+            "losses": 5,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+155",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Team Alpha Male",
+            "other": [
+              "Gracie Barra The Woodlands"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "_id": 1102226,
+      "bout_id": 1102226,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Main Card",
+      "weight_info": "155 lbs (70.3 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Drew Dober",
+          "tapology_id": "drew-dober",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/drew-dober",
+          "nickname": "The Menace",
+          "nationality": "United States",
+          "fighting_out_of": "Denver, Colorado",
+          "age_at_fight_years": 37,
+          "age_at_fight": {
+            "years": 37,
+            "months": 4,
+            "days": 2
+          },
+          "height_cm": 173,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 173
+          },
+          "reach_cm": 178,
+          "reach": {
+            "inches": 70.0,
+            "cm": 178
+          },
+          "latest_weight": {
+            "lbs": 156.0,
+            "kgs": 70.8
+          },
+          "record_at_fight": {
+            "wins": 28,
+            "losses": 15,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-205",
+            "description": "Moderate Favorite"
+          },
+          "gym": {
+            "primary": "N/A",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Michael Johnson",
+          "tapology_id": "michael-johnson-the-menace",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/michael-johnson-the-menace",
+          "nationality": "United States",
+          "fighting_out_of": "Boca Raton, Florida",
+          "age_at_fight_years": 39,
+          "age_at_fight": {
+            "years": 39,
+            "months": 9,
+            "days": 3
+          },
+          "height_cm": 178,
+          "height": {
+            "feet": 5,
+            "inches": 10,
+            "cm": 178
+          },
+          "reach_cm": 187,
+          "reach": {
+            "inches": 73.5,
+            "cm": 187
+          },
+          "latest_weight": {
+            "lbs": 155.5,
+            "kgs": 70.5
+          },
+          "record_at_fight": {
+            "wins": 24,
+            "losses": 19,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "+175",
+            "description": "Slight Underdog"
+          },
+          "gym": {
+            "primary": "Kill Cliff FC",
+            "other": []
+          }
+        }
+      }
+    },
+    {
+      "_id": 1103052,
+      "bout_id": 1103052,
+      "event_id": 136871,
+      "bout_date": "2026-03-07",
+      "broadcast": "Aired Live on Prelims",
+      "weight_info": "185 lbs (83.9 kg)",
+      "scraped_at": "2026-03-21T01:27:09.348669",
+      "fighters": {
+        "red": {
+          "fighter_name": "Donte Johnson",
+          "tapology_id": "342862",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/342862-donte-johnson",
+          "nickname": "Lock Jaw",
+          "nationality": "United States",
+          "fighting_out_of": "Fond du Lac, Wisconsin, United States",
+          "age_at_fight_years": 27,
+          "age_at_fight": {
+            "years": 27,
+            "months": 1,
+            "days": 3
+          },
+          "height_cm": 173,
+          "height": {
+            "feet": 5,
+            "inches": 8,
+            "cm": 173
+          },
+          "reach_cm": 188,
+          "reach": {
+            "inches": 74.0,
+            "cm": 188
+          },
+          "latest_weight": {
+            "lbs": 185.5,
+            "kgs": 84.1
+          },
+          "record_at_fight": {
+            "wins": 7,
+            "losses": 0,
+            "draws": 0
+          },
+          "betting_odds": {
+            "line": "-845",
+            "description": "Huge Favorite"
+          },
+          "gym": {
+            "primary": "Gnosis Combat Sports",
+            "other": []
+          }
+        },
+        "blue": {
+          "fighter_name": "Cody Brundage",
+          "tapology_id": "169818",
+          "tapology_url": "https://www.tapology.com/fightcenter/fighters/169818-cody-brundage",
+          "nationality": "United States",
+          "fighting_out_of": "Englewood, Colorado, United States",
+          "age_at_fight_years": 31,
+          "age_at_fight": {
+            "years": 31,
+            "months": 9,
+            "days": 5
+          },
+          "height_cm": 183,
+          "height": {
+            "feet": 6,
+            "inches": 0,
+            "cm": 183
+          },
+          "reach_cm": 183,
+          "reach": {
+            "inches": 72.0,
+            "cm": 183
+          },
+          "latest_weight": {
+            "lbs": 185.5,
+            "kgs": 84.1
+          },
+          "record_at_fight": {
+            "wins": 11,
+            "losses": 8,
+            "draws": 1
+          },
+          "betting_odds": {
+            "line": "+575",
+            "description": "Heavy Underdog"
+          },
+          "gym": {
+            "primary": "factoryX Muay Thai",
+            "other": []
+          }
+        }
+      }
+    }
+  ]
+}
