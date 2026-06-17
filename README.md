@@ -6,7 +6,7 @@ This scraper extracts UFC fight data from Tapology.com and stores it in MongoDB.
 
 - Scrapes UFC events (name, date, location, etc.)
 - Extracts detailed fight information (fighters, weight, category, etc.)
-- Accesses individual fight pages to extract comparative data:
+- Accesses individual fight pages to extract data:
   - UFC Rankings
   - Fight records
   - Last 5 fights
@@ -16,6 +16,7 @@ This scraper extracts UFC fight data from Tapology.com and stores it in MongoDB.
   - Age at the fight
   - Weight, height, reach
   - Gyms
+  
 
 ## Local Installation
 
