@@ -60,7 +60,7 @@ jobs:
       # debe fallar, no reingestar un snapshot viejo.
       - name: Discover and validate fresh card data
         run: |
-          RAW_FILE="$(mktemp --suffix=.jsonl)"
+          RAW_FILE="$(mktemp)"
           if scrapy crawl ufc -O "$RAW_FILE" && python validate_feed.py --raw-file "$RAW_FILE" --min-events 1 --min-bouts 1; then
             echo "Tapology snapshot validated."
           else
@@ -84,7 +84,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Refresh official UFC cards and images
         run: |
-          IMAGE_FEED="$(mktemp --suffix=.jsonl)"
+          IMAGE_FEED="$(mktemp)"
           scrapy crawl official_ufc -O "$IMAGE_FEED"
           python validate_feed.py --raw-file "$IMAGE_FEED" --min-events 1 --min-bouts 1
           python ingest.py --raw-file "$IMAGE_FEED"
