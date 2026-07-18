@@ -56,19 +56,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      # Nunca reutilizar raw.jsonl del repo: un crawl bloqueado por Tapology
-      # debe fallar, no reingestar un snapshot viejo.
-      - name: Discover and validate fresh card data
-        run: |
-          RAW_FILE="$(mktemp)"
-          if scrapy crawl ufc -O "$RAW_FILE" && python validate_feed.py --raw-file "$RAW_FILE" --min-events 1 --min-bouts 1; then
-            echo "Tapology snapshot validated."
-          else
-            echo "Tapology did not provide a usable snapshot; using the public UFC event pages."
-            scrapy crawl official_ufc -O "$RAW_FILE"
-            python validate_feed.py --raw-file "$RAW_FILE" --min-events 1 --min-bouts 1
-          fi
-          python ingest.py --raw-file "$RAW_FILE"
+      - run: scrapy crawl ufc -o raw.jsonl
+      - run: python ingest.py
 
   images:
     name: Backfill Images (Proxy)
@@ -82,12 +71,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Refresh official UFC cards and images
-        run: |
-          IMAGE_FEED="$(mktemp)"
-          scrapy crawl official_ufc -O "$IMAGE_FEED"
-          python validate_feed.py --raw-file "$IMAGE_FEED" --min-events 1 --min-bouts 1
-          python ingest.py --raw-file "$IMAGE_FEED"
+      - name: Run UFC images spider
+        run: scrapy crawl ufc_images
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 

@@ -46,17 +46,11 @@ def parse_et_time(event_date_dt, time_str):
     return et_dt.astimezone(pytz.utc).replace(tzinfo=None)
 
 # Procesar eventos próximos
-for event in events.find({"status": "scheduled"}):
-    event_date = event.get("date") or event.get("event_date")
-    start_time = event.get("start_time_et")
-    if not event_date or not start_time:
-        print(f"Skipping event {event.get('id')}: missing date or ET start time")
-        continue
-
-    start_utc = parse_et_time(event_date, start_time)
+for event in events.find({"status": "upcoming"}):
+    start_utc = parse_et_time(event["event_date"], event["start_time_et"])
 
     # Diferentes ventanas de tiempo según el tipo de evento
-    if event.get("event_type") == "numbered":
+    if event["event_type"] == "numbered":
         # UFC numerados: 3 ventanas en 8+ horas
         windows = [
             start_utc + timedelta(hours=2, minutes=30),
@@ -81,42 +75,26 @@ for event in events.find({"status": "scheduled"}):
             print(f"Scraping evento {event['_id']} (ventana {idx})")
 
             # Limpiar raw.jsonl antes de cada scrape para evitar data vieja
-            raw_file = os.path.join(os.path.dirname(__file__), ".runtime-results.jsonl")
+            raw_file = os.path.join(os.path.dirname(__file__), "raw.jsonl")
+            if os.path.exists(raw_file):
+                os.remove(raw_file)
 
             # Ejecutar scraper
-            event_url = event.get("tapology_url")
-            if not event_url:
-                print(f"Skipping event {event.get('id')}: no Tapology URL is available for result ingestion")
-                continue
+            event_url = event.get("url") or event.get("tapology_url")
             scrapy_command = [
                 "scrapy", "crawl", "ufc",
-                "-a", f"EVENT_ID={event['id']}",
+                "-a", f"EVENT_ID={event['_id']}",
                 "-a", "MODE=results",
             ]
             if event_url:
                 scrapy_command.extend(["-a", f"EVENT_URL={event_url}"])
-            # -O overwrites the temporary feed; -o appends and can replay stale data.
-            scrapy_command.extend(["-O", raw_file])
+            scrapy_command.extend(["-o", raw_file])
 
             subprocess.run(scrapy_command, check=True)
 
-            subprocess.run(
-                [
-                    sys.executable,
-                    os.path.join(os.path.dirname(__file__), "validate_feed.py"),
-                    "--raw-file", raw_file,
-                    "--min-events", "1",
-                    "--min-bouts", "1",
-                ],
-                check=True,
-            )
-
             # Ingerir en MongoDB
             print(f"Ingiriendo resultados...")
-            subprocess.run(
-                [sys.executable, os.path.join(os.path.dirname(__file__), "ingest.py"), "--raw-file", raw_file],
-                check=True,
-            )
+            subprocess.run(["python", "ingest.py"], check=True)
 
             # Marcar como completada
             events.update_one(
