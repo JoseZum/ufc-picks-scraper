@@ -23,6 +23,7 @@ on:
           - discover
           - images
           - fighter_images
+          - recover_bad_run
         default: scheduled
 
 jobs:
@@ -107,3 +108,17 @@ jobs:
         run: |
           echo "Fighter images spider completed"
           echo "Check logs above for details on uploaded images"
+
+  recover-bad-run:
+    name: Remove synthetic official-UFC records
+    runs-on: ubuntu-latest
+    if: github.event.inputs.mode == 'recover_bad_run'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python recover_bad_run.py
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
