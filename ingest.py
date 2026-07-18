@@ -7,6 +7,7 @@ Valida, normaliza e inserta en MongoDB.
 
 import json
 import os
+import argparse
 import re
 from datetime import datetime, date
 from bson import ObjectId
@@ -141,12 +142,14 @@ def transform_event(item: dict) -> dict:
     return {
         "_id": int(item["event_id"]),
         "id": int(item["event_id"]),
-        "source": "tapology",
+        "source": item.get("source", "tapology"),
         "promotion": "UFC",
         "name": item.get("name"),
         "subtitle": None,
-        "slug": extract_slug_from_url(item.get("tapology_url")),
-        "url": item.get("tapology_url"),
+        "slug": extract_slug_from_url(item.get("official_url") or item.get("tapology_url")),
+        "url": item.get("official_url") or item.get("tapology_url"),
+        "tapology_url": item.get("tapology_url"),
+        "official_url": item.get("official_url"),
         "date": datetime.combine(event_date, datetime.min.time()) if event_date else None,
         "start_time_et": item.get("start_time_et"),  # Hora de inicio en ET (ej: "22:00")
         "event_type": detect_event_type(item.get("name")),  # "numbered" o "fight_night"
@@ -245,6 +248,7 @@ def transform_fighter(fighter_data: dict, corner: str, bout_detail: dict = None)
         "reach_cm": None,
         "tapology_id": _extract_numeric_tapology_id(fighter_data),
         "tapology_url": fighter_data.get("tapology_url"),
+        "profile_image_url": fighter_data.get("profile_image_url"),
     }
 
     # Enrich with bout_detail data if available
@@ -341,9 +345,9 @@ def transform_bout(item: dict) -> dict:
         "_id": bout_id,
         "id": bout_id,
         "event_id": int(item["event_id"]),
-        "source": "tapology",
-        "url": item.get("tapology_url"),
-        "slug": extract_slug_from_url(item.get("tapology_url")),
+        "source": item.get("source", "tapology"),
+        "url": item.get("official_url") or item.get("tapology_url"),
+        "slug": extract_slug_from_url(item.get("official_url") or item.get("tapology_url")),
         "weight_class": item.get("weight_class") or f"{item.get('weight_lbs', '')} lbs".strip(),
         "gender": gender,
         "rounds_scheduled": item.get("scheduled_rounds") or 3,
@@ -583,8 +587,8 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
             red_name = fighters.get("red", {}).get("fighter_name", "?")
             blue_name = fighters.get("blue", {}).get("fighter_name", "?")
             print(f"  Deleted cancelled bout {bout_id}: {red_name} vs {blue_name}")
-            bouts_col.delete_one({"_id": bout_id})
-            stats["bouts_deleted"] += 1
+            if remove_bout_with_dependents(bout_id):
+                stats["bouts_deleted"] += 1
         return False
 
     existing = bouts_col.find_one({"_id": bout_id})
@@ -616,6 +620,44 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
         return True
 
     return False
+
+
+def _recalculate_user_stats(user_id: str) -> None:
+    """Keep user aggregates consistent after scraper-driven cancellation/removal."""
+    picks = list(db.picks.find({"user_id": user_id}))
+    total_points = sum(pick.get("points_awarded", 0) for pick in picks)
+    evaluated = [pick for pick in picks if pick.get("is_correct") is not None]
+    correct = sum(pick.get("is_correct") is True for pick in evaluated)
+    db.users.update_one(
+        {"_id": user_id},
+        {"$set": {
+            "total_points": total_points,
+            "picks_total": len(picks),
+            "picks_correct": correct,
+            "perfect_picks": sum(pick.get("points_awarded", 0) == 3 for pick in picks),
+            "accuracy": round(correct / len(evaluated), 4) if evaluated else 0.0,
+        }},
+    )
+
+
+def remove_bout_with_dependents(bout_id: int) -> bool:
+    """Mirror the admin deletion invariants when reconciliation removes a bout."""
+    bout = bouts_col.find_one({"_id": bout_id})
+    if not bout:
+        return False
+
+    event_id = bout.get("event_id")
+    affected_users = {pick.get("user_id") for pick in db.picks.find({"bout_id": bout_id}) if pick.get("user_id")}
+    db.picks.delete_many({"bout_id": bout_id})
+    db.event_card_slots.delete_one({"bout_id": bout_id})
+    bouts_col.delete_one({"_id": bout_id})
+
+    if event_id is not None:
+        total_bouts = bouts_col.count_documents({"event_id": event_id})
+        events_col.update_one({"_id": event_id}, {"$set": {"total_bouts": total_bouts, "last_updated": now}})
+    for user_id in affected_users:
+        _recalculate_user_stats(user_id)
+    return True
 
 
 def cleanup_pipeline_duplicates():
@@ -711,15 +753,15 @@ def cleanup_pipeline_duplicates():
         print(f"  Bout details: {details_cleaned} duplicados limpiados")
 
     # --- Bouts cancelados ---
-    cancelled = bouts_col.delete_many({
-        "$or": [
-            {"status": "cancelled"},
-            {"cancelled": True}
-        ]
-    })
-    if cancelled.deleted_count > 0:
-        print(f"  Cancelled bouts removed: {cancelled.deleted_count}")
-        stats["bouts_cancelled_removed"] = cancelled.deleted_count
+    cancelled_ids = [
+        bout["_id"]
+        for bout in bouts_col.find({"$or": [{"status": "cancelled"}, {"cancelled": True}]}, {"_id": 1})
+    ]
+    for bout_id in cancelled_ids:
+        if remove_bout_with_dependents(bout_id):
+            stats["bouts_cancelled_removed"] += 1
+    if stats["bouts_cancelled_removed"]:
+        print(f"  Cancelled bouts removed: {stats['bouts_cancelled_removed']}")
 
 
 def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
@@ -744,20 +786,19 @@ def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
             if bout:
                 fighter_names = f"{bout['fighters']['red']['fighter_name']} vs {bout['fighters']['blue']['fighter_name']}"
                 print(f"    - Bout {bout_id}: {fighter_names}")
-                bouts_col.delete_one({"_id": bout_id})
-                stats["bouts_deleted"] += 1
+                if remove_bout_with_dependents(bout_id):
+                    stats["bouts_deleted"] += 1
 
 
-def main():
+def main(raw_file: str):
     print(f"Starting UFC data ingestion...")
     print(f"Database: {DB_NAME}")
+    print(f"Raw file: {raw_file}")
     print(f"Minimum date: {MIN_DATE}")
 
-    # Verificar que raw.jsonl existe y no es viejo
-    raw_file = "raw.jsonl"
+    # Verificar que el snapshot entregado por el scraper existe y no es viejo.
     if not os.path.exists(raw_file):
-        print("ERROR: raw.jsonl no existe. Ejecuta el scraper primero.")
-        return
+        raise SystemExit(f"ERROR: scraper output does not exist: {raw_file}")
 
     file_age_minutes = (datetime.utcnow() - datetime.utcfromtimestamp(os.path.getmtime(raw_file))).total_seconds() / 60
     if file_age_minutes > 60:
@@ -775,8 +816,8 @@ def main():
     scraped_bouts_by_event = {}
 
     # 1. First pass: cargar bout_details en memoria para enriquecer fighters
-    print("Loading bout details from raw.jsonl...")
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    print(f"Loading bout details from {raw_file}...")
+    with open(raw_file, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)
@@ -791,7 +832,7 @@ def main():
 
     # 2. Procesar eventos
     print("\nProcessing events...")
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    with open(raw_file, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)
@@ -809,7 +850,7 @@ def main():
     print("\nProcessing bouts...")
     seen_bout_ids = set()
 
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    with open(raw_file, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)
@@ -874,4 +915,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--raw-file", default="raw.jsonl")
+    args = parser.parse_args()
+    main(args.raw_file)

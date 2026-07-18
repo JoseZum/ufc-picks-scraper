@@ -20,6 +20,7 @@ ejemplo3.html
 .env
 
 raw.jsonl
+.runtime-results.jsonl
 scraper_output.log
 docs_verificacion/
 raw_test.jsonl
