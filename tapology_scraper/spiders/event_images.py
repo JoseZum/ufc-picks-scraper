@@ -55,6 +55,26 @@ _X_SOURCE_PAGE_HOSTS = {
 _WIKIPEDIA_POSTER_SOURCES = {"wikipedia_source", "wikipedia_file"}
 _IMAGE_WINDOW_DAYS_BACK = 14
 _IMAGE_WINDOW_DAYS_AHEAD = 75
+_MONTH_NUMBERS = {
+    month.lower(): index
+    for index, month in enumerate(
+        (
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ),
+        start=1,
+    )
+}
 
 
 def _ascii_text(value: str | None) -> str:
@@ -292,10 +312,42 @@ def extract_ufc_hero_url(response) -> str | None:
 
 def extract_ufc_event_date(response) -> str | None:
     date_time = response.css("time[datetime]::attr(datetime)").get()
-    if not date_time:
-        return None
-    match = re.match(r"(\d{4}-\d{2}-\d{2})", date_time)
-    return match.group(1) if match else None
+    if date_time:
+        match = re.match(r"(\d{4}-\d{2}-\d{2})", date_time)
+        if match:
+            return match.group(1)
+
+    # Newer UFC pages dropped the machine-readable <time> element but retain
+    # the date in either the canonical slug or meta description.
+    slug_match = re.search(
+        r"/(?:event/)?ufc-fight-night-([a-z]+)-(\d{1,2})-(\d{4})",
+        urlparse(response.url).path.lower(),
+    )
+    if slug_match and slug_match.group(1) in _MONTH_NUMBERS:
+        return date(
+            int(slug_match.group(3)),
+            _MONTH_NUMBERS[slug_match.group(1)],
+            int(slug_match.group(2)),
+        ).isoformat()
+
+    description = " ".join(
+        response.css(
+            'meta[name="description"]::attr(content), '
+            'meta[property="og:description"]::attr(content)'
+        ).getall()
+    )
+    description_match = re.search(
+        r"\b(" + "|".join(_MONTH_NUMBERS) + r")\s+(\d{1,2}),\s+(\d{4})\b",
+        description,
+        flags=re.IGNORECASE,
+    )
+    if description_match:
+        return date(
+            int(description_match.group(3)),
+            _MONTH_NUMBERS[description_match.group(1).lower()],
+            int(description_match.group(2)),
+        ).isoformat()
+    return None
 
 
 def _event_date_string(event: dict) -> str | None:
@@ -659,8 +711,11 @@ class EventImagesSpider(scrapy.Spider):
 
     def parse_ufc_index(self, response):
         seen: set[str] = set()
+        ufc_host = (urlparse(response.url).hostname or "").lower()
         for href in response.xpath('//a[contains(@href, "/event/")]/@href').getall():
             url = response.urljoin(href)
+            if (urlparse(url).hostname or "").lower() != ufc_host:
+                continue
             if url in seen or url in self.requested_official_urls:
                 continue
             seen.add(url)

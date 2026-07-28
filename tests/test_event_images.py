@@ -7,6 +7,7 @@ from tapology_scraper.spiders.event_images import (
     clean_event_name,
     extract_credit_url,
     extract_source_image_url,
+    extract_ufc_event_date,
     extract_ufc_hero_url,
     event_is_in_image_window,
     is_supported_source_page,
@@ -158,6 +159,24 @@ class EventImageResolverTests(unittest.TestCase):
             extract_ufc_hero_url(response),
             "https://ufc.com/images/styles/background_image_xl_2x/s3/art.jpg",
         )
+
+    def test_extracts_new_ufc_event_date_from_slug(self):
+        response = html_response(
+            "https://www.ufcespanol.com/event/"
+            "ufc-fight-night-august-22-2026",
+            "<html></html>",
+        )
+        self.assertEqual(extract_ufc_event_date(response), "2026-08-22")
+
+    def test_extracts_numbered_ufc_event_date_from_description(self):
+        response = html_response(
+            "https://www.ufcespanol.com/event/ufc-330",
+            """
+            <meta name="description"
+                  content="Live in Philadelphia on August 15, 2026">
+            """,
+        )
+        self.assertEqual(extract_ufc_event_date(response), "2026-08-15")
 
     def test_image_refresh_window_includes_current_upcoming_cards(self):
         self.assertTrue(
