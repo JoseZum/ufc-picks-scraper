@@ -155,7 +155,6 @@ def transform_event(item: dict) -> dict:
         "status": "scheduled",  # Will be updated when results come in
         "total_bouts": item.get("total_bouts") or 0,
         "main_event_bout_id": None,  # Set later
-        "poster_image_url": item.get("poster_image_url"),
         "scraped_at": now,
         "last_updated": now,
     }
@@ -540,20 +539,33 @@ def process_event(item: dict) -> bool:
         print(f"  Inserted event: {item.get('name')}")
         return True
     else:
-        # Always update name and poster_image_url, even if event has finished
-        # This ensures event information stays in sync with Tapology
+        # Event images are owned exclusively by the event_images spider:
+        # poster_image_url comes from Wikipedia's credited source and
+        # hero_image_url comes from the official UFC page.  Card ingestion must
+        # never replace either field with stale Tapology data.
         update_fields = {
             "name": event_doc["name"],
             "last_updated": now,
         }
 
-        # Update poster if it exists in scraped data
-        if event_doc.get("poster_image_url"):
-            update_fields["poster_image_url"] = event_doc["poster_image_url"]
-
         # If event is still scheduled, update all fields
         if existing.get("status") == "scheduled":
-            update_fields = {k: v for k, v in event_doc.items() if k != "_id"}
+            update_fields = {
+                k: v
+                for k, v in event_doc.items()
+                if k not in {
+                    "_id",
+                    "poster_image_url",
+                    "poster_image_source",
+                    "poster_source_page_url",
+                    "wikipedia_article_url",
+                    "wikipedia_file_url",
+                    "wikipedia_image_url",
+                    "hero_image_url",
+                    "hero_image_source",
+                    "official_url",
+                }
+            }
 
         events_col.update_one(
             {"_id": event_id},

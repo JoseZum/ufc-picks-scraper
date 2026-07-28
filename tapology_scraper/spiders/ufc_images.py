@@ -1,15 +1,13 @@
-"""
-Spider de Refresh de Imágenes UFC
+"""Legacy Tapology fighter-headshot refresh.
 
-Siempre re-scrapea TODOS los eventos y bouts y sobrescribe con el link
-más reciente encontrado en Tapology. Si la página no expone un poster
-o headshot válido, no se toca el valor previo en Mongo.
+Event posters are intentionally out of scope: ``event_images`` owns them and
+resolves them through Wikipedia's credited source.  Keeping that ownership
+boundary prevents a manual legacy run from restoring Tapology poster URLs.
 
 Usage:
-    scrapy crawl ufc_images                      # Ambos (posters + headshots)
-    scrapy crawl ufc_images -a MODE=events       # Solo posters
-    scrapy crawl ufc_images -a MODE=bouts        # Solo headshots
-    scrapy crawl ufc_images -a EVENT_ID=135755   # Solo un evento específico
+    scrapy crawl ufc_images
+    scrapy crawl ufc_images -a MODE=bouts
+    scrapy crawl ufc_images -a EVENT_ID=135755
 """
 
 import scrapy
@@ -58,54 +56,16 @@ class UfcImagesSpider(scrapy.Spider):
             self.logger.info(f"Targeting specific event: {self.target_event_id}")
 
     async def start(self):
-        """Async entry point - decide qué scrappear según MODE"""
-        if self.mode == "bouts":
-            # Solo headshots
-            async for req in self.load_bouts_from_mongo():
-                yield req
-        elif self.mode == "events":
-            # Solo posters
-            async for req in self.load_events_from_mongo():
-                yield req
-        else:
-            # Ambos (default)
-            async for req in self.load_events_from_mongo():
-                yield req
-            async for req in self.load_bouts_from_mongo():
-                yield req
+        """Refresh fighter headshots only."""
+        if self.mode == "events":
+            self.logger.warning(
+                "MODE=events is disabled; run `scrapy crawl event_images` "
+                "for Wikipedia/UFC event art"
+            )
+            return
 
-    async def load_events_from_mongo(self):
-        """Cargar eventos para refrescar poster_image_url.
-
-        Siempre re-scrapea todos los eventos y sobrescribe con el link más
-        reciente de Tapology. Si la página no expone un poster legítimo,
-        parse_event_images simplemente no emite nada y el valor previo queda.
-        """
-        if self.target_event_id:
-            query = {"id": int(self.target_event_id)}
-        else:
-            query = {}
-        
-        try:
-            events = await self.db.events.find(query).to_list(length=None)
-            self.logger.info(f"Found {len(events)} events to scrape for posters")
-            
-            for event in events:
-                tap_url = event.get("tapology_url") or event.get("url")
-                event_id = event.get("id") or event.get("_id") or event.get("event_id")
-                if not tap_url:
-                    self.logger.warning(f"Event {event_id} has no tapology/url")
-                    continue
-
-                yield scrapy.Request(
-                    url=tap_url,
-                    callback=self.parse_event_images,
-                    meta={"event_id": event_id},
-                    errback=self.handle_error,
-                    dont_filter=True
-                )
-        except Exception as e:
-            self.logger.error(f"Error loading events from Mongo: {e}")
+        async for req in self.load_bouts_from_mongo():
+            yield req
 
     async def load_bouts_from_mongo(self):
         """Cargar bouts para refrescar fighter headshots.
@@ -137,38 +97,6 @@ class UfcImagesSpider(scrapy.Spider):
                 )
         except Exception as e:
             self.logger.error(f"Error loading bouts from Mongo: {e}")
-
-    def parse_event_images(self, response):
-        """Extraer poster del evento"""
-        event_id = response.meta["event_id"]
-        
-        # Buscar poster image
-        poster_imgs = response.css('img[src*="poster_images"]::attr(src)').getall()
-        
-        if not poster_imgs:
-            self.logger.warning(f"No poster found for event {event_id}")
-            return
-        
-        # Tapology a veces deja varias versiones en el HTML. Priorizamos la ultima.
-        raw_url = poster_imgs[-1]
-        
-        # Normalizar a formato proxy
-        # De: https://images.tapology.com/poster_images/135755/profile/xxx.jpg
-        # A: /proxy/tapology/poster_images/135755/profile/xxx.jpg
-        normalized_url = self._normalize_image_url(raw_url)
-        
-        if not normalized_url:
-            self.logger.warning(f"Could not normalize poster URL: {raw_url}")
-            return
-        
-        self.logger.info(f"Found poster for event {event_id}: {normalized_url}")
-        
-        # Actualizar MongoDB
-        yield {
-            "type": "event_poster",
-            "event_id": event_id,
-            "poster_image_url": normalized_url
-        }
 
     def parse_bout_images(self, response):
         """Extraer headshots de fighters (red y blue)"""
@@ -265,21 +193,7 @@ class UfcImagesPipeline:
     async def process_item(self, item, spider):
         """Procesar cada item y actualizar MongoDB"""
         
-        if item.get("type") == "event_poster":
-            # Actualizar poster del evento
-            result = await self.db.events.update_one(
-                {"id": item["event_id"]},
-                {"$set": {"poster_image_url": item["poster_image_url"]}}
-            )
-            
-            if result.modified_count > 0:
-                spider.logger.info(f"Updated event {item['event_id']} poster")
-            elif result.matched_count > 0:
-                spider.logger.info(f"Event {item['event_id']} poster already up to date")
-            else:
-                spider.logger.warning(f"Event {item['event_id']} not found while updating poster")
-        
-        elif item.get("type") == "bout_fighters":
+        if item.get("type") == "bout_fighters":
             # Actualizar headshots de fighters
             result = await self.db.bouts.update_one(
                 {"id": item["bout_id"]},

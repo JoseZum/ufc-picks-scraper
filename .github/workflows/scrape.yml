@@ -8,7 +8,7 @@ on:
     # Descubrimiento de eventos: 2 veces por semana (lunes y jueves)
     - cron: "0 2 * * 1,4"         # Aumentado de 1 vez a 2 veces/semana
 
-    # Backfill de imágenes (proxy): Diario
+    # Posters de Wikipedia/origen + hero oficial UFC: diario
     - cron: "0 3 * * *"           # Sin cambios
 
     # Subida de imágenes de fighters a S3: diario
@@ -60,7 +60,7 @@ jobs:
       - run: python ingest.py
 
   images:
-    name: Backfill Images (Proxy)
+    name: Refresh Event Images (Wikipedia + UFC)
     runs-on: ubuntu-latest
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
@@ -71,8 +71,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Run UFC images spider
-        run: scrapy crawl ufc_images
+      - name: Resolve Wikipedia card posters and official UFC heroes
+        run: scrapy crawl event_images
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 

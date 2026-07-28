@@ -132,39 +132,6 @@ class UfcSpider(scrapy.Spider):
         else:
             total_bouts = None
 
-        # Extract event poster image URL
-        # Tapology stores posters in: https://images.tapology.com/poster_images/{event_id}/profile/xxxxx.jpg
-        poster_image_url = None
-
-        # Method 1: Look for poster images in img tags
-        poster_imgs = response.css('img[src*="poster_images"]::attr(src)').getall()
-        if poster_imgs:
-            poster_url = poster_imgs[0]
-            # Normalize the URL to a proxy path
-            if poster_url.startswith('//'):
-                poster_url = f"https:{poster_url}"
-            elif poster_url.startswith('/'):
-                poster_url = f"https://images.tapology.com{poster_url}"
-
-            # Convert to proxy path: /proxy/tapology/poster_images/...
-            if "images.tapology.com/" in poster_url:
-                path = poster_url.split("images.tapology.com/")[1]
-                poster_image_url = f"/proxy/tapology/{path}"
-
-        # Method 2: Look for letterbox images as fallback (event promotional images)
-        if not poster_image_url:
-            letterbox_imgs = response.css('img[src*="letterbox_images"]::attr(src)').getall()
-            if letterbox_imgs:
-                letterbox_url = letterbox_imgs[0]
-                if letterbox_url.startswith('//'):
-                    letterbox_url = f"https:{letterbox_url}"
-                elif letterbox_url.startswith('/'):
-                    letterbox_url = f"https://images.tapology.com{letterbox_url}"
-
-                if "images.tapology.com/" in letterbox_url:
-                    path = letterbox_url.split("images.tapology.com/")[1]
-                    poster_image_url = f"/proxy/tapology/{path}"
-
         yield {
             "type": "event",
             "event_id": event_id,
@@ -178,8 +145,7 @@ class UfcSpider(scrapy.Spider):
             "venue": event_data.get('Venue'),
             "location": event_data.get('Location'),
             "total_bouts": total_bouts,
-            "tapology_url": event_url,
-            "poster_image_url": poster_image_url
+            "tapology_url": event_url
         }
 
         # Peleas de la cartelera en general
