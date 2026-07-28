@@ -1,0 +1,951 @@
+"""ESPN UFC ETL spider.
+
+Modes:
+
+* ``general``: cards + fighter profiles + records + S3 headshots + results.
+* ``results``: only fill missing results on existing UFC Picks cards.
+* ``photos``: link fighters and refresh missing ESPN headshots for upcoming cards.
+
+Examples:
+    scrapy crawl espn -a MODE=general
+    scrapy crawl espn -a MODE=results -a DAYS_BACK=14
+    scrapy crawl espn -a MODE=photos -a DAYS_AHEAD=60
+    scrapy crawl espn -a MODE=general -a EVENT_ID=600059339
+    scrapy crawl espn -a MODE=general -a SEASON=2026
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+import os
+from urllib.parse import urlencode
+
+import httpx
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
+import scrapy
+
+from tapology_scraper.espn_etl import (
+    age_on_date,
+    calculate_pick_points,
+    competitor_snapshot,
+    document_date,
+    event_status,
+    find_bout_match,
+    find_event_match,
+    infer_card_position,
+    map_competitors_to_corners,
+    safe_external_http_url,
+    transform_athlete_profile,
+    transform_athlete_records,
+    transform_competition_metadata,
+    transform_event,
+    transform_new_bout,
+    transform_result,
+)
+
+
+ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
+ESPN_ATHLETE_URL = (
+    "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{athlete_id}"
+)
+ESPN_RECORDS_URL = (
+    "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/"
+    "athletes/{athlete_id}/records"
+)
+ESPN_COMPETITION_URL = (
+    "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/"
+    "events/{event_id}/competitions/{competition_id}"
+)
+
+
+def _source_id_values(value: str) -> list:
+    values: list = [str(value)]
+    if str(value).isdigit():
+        values.append(int(value))
+    return values
+
+
+def _non_empty_fields(fields: dict) -> dict:
+    return {
+        key: value
+        for key, value in fields.items()
+        if value is not None and value != ""
+    }
+
+
+class EspnSpider(scrapy.Spider):
+    name = "espn"
+    allowed_domains = [
+        "site.api.espn.com",
+        "sports.core.api.espn.com",
+        "a.espncdn.com",
+    ]
+
+    custom_settings = {
+        "DOWNLOAD_DELAY": 0.15,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 6,
+        "ROBOTSTXT_OBEY": True,
+        "FEED_EXPORT_ENCODING": "utf-8",
+        "ITEM_PIPELINES": {
+            "tapology_scraper.spiders.espn.EspnFighterImagePipeline": 300,
+        },
+        "DEFAULT_REQUEST_HEADERS": {
+            "User-Agent": "UFC-Picks/1.0 ESPN ETL",
+            "Accept": "application/json,text/plain,*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    }
+
+    def __init__(
+        self,
+        MODE="general",
+        EVENT_ID=None,
+        SEASON=None,
+        DAYS_BACK=None,
+        DAYS_AHEAD=None,
+        LIMIT=None,
+        FORCE_PHOTOS=None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.mode = str(MODE or "general").lower()
+        if self.mode not in {"general", "results", "photos"}:
+            raise ValueError("MODE must be general, results, or photos")
+
+        mongo_uri = os.environ.get("MONGODB_URI")
+        if not mongo_uri:
+            raise RuntimeError("MONGODB_URI is required")
+
+        self.mongo_client = MongoClient(mongo_uri)
+        self.db = self.mongo_client.ufc_picks
+        self.target_event_id = str(EVENT_ID) if EVENT_ID else None
+        self.season = int(SEASON) if SEASON else None
+        self.days_back = int(DAYS_BACK) if DAYS_BACK else (14 if self.mode != "photos" else 0)
+        self.days_ahead = int(DAYS_AHEAD) if DAYS_AHEAD else (60 if self.mode != "results" else 1)
+        self.limit = int(LIMIT) if LIMIT else None
+        self.force_photos = str(FORCE_PHOTOS or "").lower() in {"1", "true", "yes"}
+        self.requested_athletes: set[str] = set()
+        self.processed_events = 0
+        self.processed_bouts = 0
+        self.results_loaded = 0
+        self.profiles_loaded = 0
+
+    async def start(self):
+        if self.mode == "results" and not self.target_event_id and not self.season:
+            pending_dates = self._pending_result_dates()
+            if not pending_dates:
+                self.logger.info("No local UFC cards have pending results")
+                return
+            for pending_date in pending_dates:
+                params = {"dates": pending_date.strftime("%Y%m%d"), "limit": 200}
+                yield scrapy.Request(
+                    f"{ESPN_SCOREBOARD_URL}?{urlencode(params)}",
+                    callback=self.parse_scoreboard,
+                    errback=self.log_request_error,
+                    dont_filter=True,
+                )
+            return
+
+        dates = self._date_query()
+        params = {"dates": dates, "limit": 200}
+        yield scrapy.Request(
+            f"{ESPN_SCOREBOARD_URL}?{urlencode(params)}",
+            callback=self.parse_scoreboard,
+            errback=self.log_request_error,
+            dont_filter=True,
+        )
+
+    def _pending_result_dates(self) -> list[date]:
+        event_ids = self.db.bouts.distinct(
+            "event_id",
+            {
+                "status": {"$ne": "cancelled"},
+                "$or": [
+                    {"result": {"$exists": False}},
+                    {"result": None},
+                    {"result": {}},
+                ],
+            },
+        )
+        if not event_ids:
+            return []
+
+        latest_date = date.today() + timedelta(days=1)
+        pending_dates = {
+            parsed_date
+            for event in self.db.events.find(
+                {
+                    "id": {"$in": event_ids},
+                    "name": {"$regex": r"\bUFC\b", "$options": "i"},
+                },
+                {"date": 1, "event_date": 1},
+            )
+            if (
+                parsed_date := document_date(
+                    event.get("date") or event.get("event_date")
+                )
+            )
+            and parsed_date <= latest_date
+        }
+        return sorted(pending_dates)
+
+    def _date_query(self) -> str:
+        if self.season:
+            return str(self.season)
+
+        if self.target_event_id:
+            local_event = self.db.events.find_one(
+                {
+                    "$or": [
+                        {"id": {"$in": _source_id_values(self.target_event_id)}},
+                        {"_id": {"$in": _source_id_values(self.target_event_id)}},
+                        {"espn_event_id": {"$in": _source_id_values(self.target_event_id)}},
+                    ]
+                },
+                {"date": 1, "event_date": 1},
+            )
+            if local_event:
+                target_date = document_date(
+                    local_event.get("date") or local_event.get("event_date")
+                )
+                if target_date:
+                    return target_date.strftime("%Y%m%d")
+            # ESPN event IDs do not encode a date. Query the current season and
+            # filter the response by ID when no local date mapping exists.
+            if self.target_event_id.startswith("600"):
+                return str(date.today().year)
+
+        today = date.today()
+        start = today - timedelta(days=self.days_back)
+        end = today + timedelta(days=self.days_ahead)
+        return f"{start:%Y%m%d}-{end:%Y%m%d}"
+
+    def parse_scoreboard(self, response):
+        payload = response.json()
+        events = [
+            event
+            for event in payload.get("events") or []
+            if "ufc" in str(event.get("name") or "").lower()
+        ]
+        if self.target_event_id:
+            events = [
+                event
+                for event in events
+                if self._is_target_event(event)
+            ]
+        if self.limit:
+            events = events[: self.limit]
+
+        existing_events = list(
+            self.db.events.find(
+                {"name": {"$regex": r"\bUFC\b", "$options": "i"}},
+            )
+        )
+        for espn_event in events:
+            existing_event = find_event_match(espn_event, existing_events)
+            if self.mode in {"results", "photos"} and not existing_event:
+                self.logger.warning(
+                    "Skipping ESPN event without local match in %s mode: %s",
+                    self.mode,
+                    espn_event.get("name"),
+                )
+                continue
+
+            internal_event = self._upsert_event(espn_event, existing_event)
+            if not internal_event:
+                continue
+
+            self.processed_events += 1
+            yield from self._process_card(espn_event, internal_event)
+
+    def _is_target_event(self, espn_event: dict) -> bool:
+        if str(espn_event.get("id")) == self.target_event_id:
+            return True
+        local_event = self.db.events.find_one(
+            {
+                "$or": [
+                    {"id": {"$in": _source_id_values(self.target_event_id)}},
+                    {"_id": {"$in": _source_id_values(self.target_event_id)}},
+                ]
+            }
+        )
+        if not local_event:
+            return False
+        return find_event_match(espn_event, [local_event]) is not None
+
+    def _upsert_event(self, espn_event: dict, existing_event: dict | None) -> dict | None:
+        if existing_event:
+            internal_id = int(existing_event.get("id") or existing_event["_id"])
+        elif self.mode == "general":
+            internal_id = int(espn_event["id"])
+        else:
+            return None
+
+        transformed = transform_event(espn_event, internal_id)
+        if existing_event:
+            protected_fields = {
+                "_id",
+                "id",
+                "source",
+                "slug",
+                "url",
+                "status",
+                "poster_image_url",
+                "poster_image_source",
+                "poster_source_page_url",
+                "wikipedia_article_url",
+                "wikipedia_file_url",
+                "wikipedia_image_url",
+                "hero_image_url",
+                "hero_image_source",
+                "official_url",
+                "event_art",
+                "event_art_content_type",
+            }
+            updates = {
+                key: value
+                for key, value in transformed.items()
+                if key not in protected_fields and value is not None
+            }
+            updates.update(
+                {
+                    "espn_event_id": str(espn_event["id"]),
+                    "espn_url": transformed["espn_url"],
+                    "espn_last_updated": datetime.utcnow(),
+                }
+            )
+            self.db.events.update_one({"id": internal_id}, {"$set": updates})
+        else:
+            self.db.events.update_one(
+                {"id": internal_id},
+                {"$setOnInsert": transformed},
+                upsert=True,
+            )
+
+        return self.db.events.find_one({"id": internal_id})
+
+    def _process_card(self, espn_event: dict, internal_event: dict):
+        event_id = int(internal_event["id"])
+        competitions = espn_event.get("competitions") or []
+        existing_bouts = list(self.db.bouts.find({"event_id": event_id}))
+        main_event_bout_id = None
+
+        for index, competition in enumerate(competitions):
+            existing_bout = find_bout_match(competition, existing_bouts)
+            if self.mode in {"results", "photos"} and not existing_bout:
+                self.logger.warning(
+                    "Skipping unmatched ESPN competition %s in event %s",
+                    competition.get("id"),
+                    event_id,
+                )
+                continue
+
+            if not existing_bout and self.mode == "general":
+                bout = transform_new_bout(
+                    competition,
+                    event_id,
+                    index,
+                    len(competitions),
+                )
+                self.db.bouts.update_one(
+                    {"id": bout["id"]},
+                    {"$setOnInsert": bout},
+                    upsert=True,
+                )
+                existing_bout = self.db.bouts.find_one({"id": bout["id"]})
+                existing_bouts.append(existing_bout)
+
+            if not existing_bout:
+                continue
+
+            self.processed_bouts += 1
+            corner_mapping = map_competitors_to_corners(competition, existing_bout)
+            self._link_competitors(existing_bout, competition, corner_mapping)
+
+            if existing_bout.get("is_main_event") or index == len(competitions) - 1:
+                main_event_bout_id = int(existing_bout["id"])
+
+            if self.mode in {"general", "results"}:
+                self._load_result(existing_bout, competition, corner_mapping)
+
+            if self.mode in {"general", "photos"}:
+                for competitor in corner_mapping.values():
+                    athlete_id = str(competitor.get("id") or "")
+                    if athlete_id and athlete_id not in self.requested_athletes:
+                        self.requested_athletes.add(athlete_id)
+                        yield self._athlete_request(athlete_id)
+
+            if self.mode == "general":
+                yield self._competition_request(
+                    str(espn_event["id"]),
+                    str(competition["id"]),
+                    int(existing_bout["id"]),
+                )
+
+            self._ensure_card_slot(
+                existing_bout,
+                event_id,
+                index,
+                len(competitions),
+            )
+
+        event_update = {
+            "total_bouts": len(competitions),
+            "espn_event_id": str(espn_event["id"]),
+            "espn_last_updated": datetime.utcnow(),
+        }
+        if main_event_bout_id:
+            event_update["main_event_bout_id"] = main_event_bout_id
+
+        if event_status(espn_event) == "completed":
+            unresolved = self.db.bouts.count_documents(
+                {
+                    "event_id": event_id,
+                    "status": {"$nin": ["completed", "cancelled"]},
+                }
+            )
+            if unresolved == 0:
+                event_update["status"] = "completed"
+        self.db.events.update_one({"id": event_id}, {"$set": event_update})
+
+    def _link_competitors(
+        self,
+        bout: dict,
+        competition: dict,
+        corner_mapping: dict[str, dict],
+    ):
+        set_fields = {
+            "espn_competition_id": str(competition["id"]),
+            "espn_last_updated": datetime.utcnow(),
+        }
+        is_pre_fight = not (
+            ((competition.get("status") or {}).get("type") or {}).get("completed")
+        )
+        for corner, competitor in corner_mapping.items():
+            snapshot = competitor_snapshot(competitor)
+            for field in ("espn_id", "espn_url", "fighter_name", "nationality"):
+                value = snapshot.get(field)
+                if value and value != "Unknown":
+                    set_fields[f"fighters.{corner}.{field}"] = value
+            if is_pre_fight and snapshot.get("record_at_fight"):
+                set_fields[f"fighters.{corner}.record_at_fight"] = snapshot[
+                    "record_at_fight"
+                ]
+
+            self.db.fighters.update_one(
+                {"_id": int(snapshot["espn_id"])},
+                {
+                    "$set": {
+                        "espn_id": snapshot["espn_id"],
+                        "fighter_name": snapshot["fighter_name"],
+                        "espn_url": snapshot.get("espn_url"),
+                        "nationality": snapshot.get("nationality"),
+                        "current_record": snapshot.get("record_at_fight"),
+                        "last_updated": datetime.utcnow(),
+                    },
+                    "$setOnInsert": {"created_at": datetime.utcnow()},
+                },
+                upsert=True,
+            )
+
+        self.db.bouts.update_one({"id": bout["id"]}, {"$set": set_fields})
+        detail_fields = {
+            key: value
+            for key, value in set_fields.items()
+            if key.startswith("fighters.")
+        }
+        if detail_fields:
+            self.db.bout_details.update_one(
+                {"bout_id": bout["id"]},
+                {
+                    "$set": {
+                        **detail_fields,
+                        "event_id": bout["event_id"],
+                        "espn_competition_id": str(competition["id"]),
+                        "last_updated": datetime.utcnow(),
+                    },
+                    "$setOnInsert": {"_id": bout["id"]},
+                },
+                upsert=True,
+            )
+
+    def _load_result(
+        self,
+        bout: dict,
+        competition: dict,
+        corner_mapping: dict[str, dict],
+    ):
+        result = transform_result(competition, corner_mapping)
+        if not result:
+            return
+
+        current = self.db.bouts.find_one({"id": bout["id"]}, {"result": 1})
+        if current and current.get("result"):
+            return
+
+        now = datetime.utcnow()
+        self.db.bouts.update_one(
+            {"id": bout["id"]},
+            {
+                "$set": {
+                    "result": result,
+                    "status": "completed",
+                    "espn_competition_id": str(competition["id"]),
+                    "last_updated": now,
+                }
+            },
+        )
+        self.db.bout_details.update_one(
+            {"bout_id": bout["id"]},
+            {
+                "$set": {
+                    "event_id": bout["event_id"],
+                    "result": result,
+                    "espn_competition_id": str(competition["id"]),
+                    "last_updated": now,
+                },
+                "$setOnInsert": {"_id": bout["id"]},
+            },
+            upsert=True,
+        )
+        self._assign_points(int(bout["id"]), result)
+        self.results_loaded += 1
+
+    def _assign_points(self, bout_id: int, result: dict):
+        users_affected = set()
+        for pick in self.db.picks.find({"bout_id": bout_id}):
+            points, is_correct = calculate_pick_points(pick, result)
+            self.db.picks.update_one(
+                {"_id": pick["_id"]},
+                {
+                    "$set": {
+                        "points_awarded": points,
+                        "is_correct": is_correct,
+                    }
+                },
+            )
+            if pick.get("user_id") is not None:
+                users_affected.add(pick["user_id"])
+
+        for user_id in users_affected:
+            picks = list(self.db.picks.find({"user_id": user_id}))
+            evaluated = [pick for pick in picks if pick.get("is_correct") is not None]
+            correct = sum(pick.get("is_correct") is True for pick in evaluated)
+            self.db.users.update_one(
+                {"_id": user_id},
+                {
+                    "$set": {
+                        "total_points": sum(
+                            int(pick.get("points_awarded") or 0) for pick in picks
+                        ),
+                        "picks_total": len(picks),
+                        "picks_correct": correct,
+                        "perfect_picks": sum(
+                            int(pick.get("points_awarded") or 0) == 3 for pick in picks
+                        ),
+                        "accuracy": round(correct / len(evaluated), 4)
+                        if evaluated
+                        else 0.0,
+                    }
+                },
+            )
+
+    def _ensure_card_slot(
+        self,
+        bout: dict,
+        event_id: int,
+        index: int,
+        total: int,
+    ):
+        if self.db.event_card_slots.find_one({"bout_id": bout["id"]}):
+            return
+
+        position = infer_card_position(index, total)
+        self.db.event_card_slots.update_one(
+            {"id": f"{event_id}:{bout['id']}"},
+            {
+                "$setOnInsert": {
+                    "_id": f"{event_id}:{bout['id']}",
+                    "id": f"{event_id}:{bout['id']}",
+                    "event_id": event_id,
+                    "bout_id": int(bout["id"]),
+                    "card_section": position["card_section"],
+                    "order_overall": position["order_overall"],
+                    "order_section": position["order_section"],
+                    "is_main_event": position["is_main_event"],
+                    "is_co_main": position["is_co_main"],
+                    "source": "espn",
+                }
+            },
+            upsert=True,
+        )
+
+    def _athlete_request(self, athlete_id: str) -> scrapy.Request:
+        params = {"lang": "en", "region": "us"}
+        return scrapy.Request(
+            f"{ESPN_ATHLETE_URL.format(athlete_id=athlete_id)}?{urlencode(params)}",
+            callback=self.parse_athlete,
+            errback=self.log_request_error,
+            cb_kwargs={"athlete_id": athlete_id},
+        )
+
+    def _competition_request(
+        self,
+        event_id: str,
+        competition_id: str,
+        bout_id: int,
+    ) -> scrapy.Request:
+        params = {"lang": "en", "region": "us"}
+        url = ESPN_COMPETITION_URL.format(
+            event_id=event_id,
+            competition_id=competition_id,
+        )
+        return scrapy.Request(
+            f"{url}?{urlencode(params)}",
+            callback=self.parse_competition_metadata,
+            errback=self.log_request_error,
+            cb_kwargs={"bout_id": bout_id},
+        )
+
+    def parse_competition_metadata(self, response, bout_id: int):
+        metadata = _non_empty_fields(
+            transform_competition_metadata(response.json())
+        )
+        metadata["espn_last_updated"] = datetime.utcnow()
+        self.db.bouts.update_one({"id": bout_id}, {"$set": metadata})
+
+        slot = self.db.event_card_slots.find_one({"bout_id": bout_id})
+        if slot and slot.get("source") == "espn":
+            self.db.event_card_slots.update_one(
+                {"_id": slot["_id"]},
+                {
+                    "$set": {
+                        "card_section": metadata["card_section"],
+                        "order_overall": metadata["espn_match_number"],
+                        "order_section": metadata["espn_match_number"],
+                        "is_main_event": metadata["is_main_event"],
+                        "is_co_main": metadata["is_co_main_event"],
+                    }
+                },
+            )
+
+    def parse_athlete(self, response, athlete_id: str):
+        profile = transform_athlete_profile(response.json())
+        if not profile.get("espn_id"):
+            return
+
+        self._save_athlete_profile(profile)
+        self.profiles_loaded += 1
+
+        if self.mode == "general":
+            params = {"lang": "en", "region": "us"}
+            yield scrapy.Request(
+                f"{ESPN_RECORDS_URL.format(athlete_id=athlete_id)}?{urlencode(params)}",
+                callback=self.parse_athlete_records,
+                errback=self.log_request_error,
+                cb_kwargs={"athlete_id": athlete_id},
+            )
+
+        image_url = profile.get("espn_headshot_download_url")
+        existing = self.db.fighters.find_one({"_id": int(athlete_id)}) or {}
+        already_has_espn_photo = (
+            existing.get("image_source") == "espn" and existing.get("image_key")
+        )
+        if (
+            image_url
+            and safe_external_http_url(image_url)
+            and (self.force_photos or not already_has_espn_photo)
+        ):
+            yield {
+                "type": "espn_fighter_image",
+                "espn_id": athlete_id,
+                "fighter_name": profile.get("fighter_name"),
+                "image_url": image_url,
+                "source_url": profile.get("espn_headshot_url"),
+            }
+
+    def _save_athlete_profile(self, profile: dict):
+        athlete_id = profile["espn_id"]
+        clean_profile = _non_empty_fields(profile)
+        clean_profile["last_updated"] = datetime.utcnow()
+        self.db.fighters.update_one(
+            {"_id": int(athlete_id)},
+            {
+                "$set": clean_profile,
+                "$setOnInsert": {"created_at": datetime.utcnow()},
+            },
+            upsert=True,
+        )
+
+        static_fields = {
+            key: value
+            for key, value in clean_profile.items()
+            if key
+            in {
+                "espn_id",
+                "espn_url",
+                "nickname",
+                "nationality",
+                "date_of_birth",
+                "height_cm",
+                "height",
+                "reach_cm",
+                "reach",
+                "latest_weight",
+                "stance",
+                "weight_class",
+                "gym",
+                "espn_headshot_url",
+            }
+        }
+        self._update_embedded_fighter_fields(
+            athlete_id,
+            static_fields,
+            {},
+        )
+        self._update_scheduled_fighter_ages(
+            athlete_id,
+            clean_profile.get("date_of_birth"),
+            clean_profile.get("age_at_fight_years"),
+        )
+
+    def parse_athlete_records(self, response, athlete_id: str):
+        record_fields = transform_athlete_records(response.json())
+        self.db.fighters.update_one(
+            {"_id": int(athlete_id)},
+            {
+                "$set": {
+                    **record_fields,
+                    "records_updated_at": datetime.utcnow(),
+                }
+            },
+        )
+        self._update_embedded_fighter_fields(
+            athlete_id,
+            {},
+            {"career_stats": record_fields.get("career_stats")},
+        )
+
+    def _update_embedded_fighter_fields(
+        self,
+        athlete_id: str,
+        static_fields: dict,
+        scheduled_fields: dict,
+    ):
+        source_values = _source_id_values(athlete_id)
+        for collection_name in ("bouts", "bout_details"):
+            collection = self.db[collection_name]
+            for corner in ("red", "blue"):
+                lookup = {f"fighters.{corner}.espn_id": {"$in": source_values}}
+                if static_fields:
+                    collection.update_many(
+                        lookup,
+                        {
+                            "$set": {
+                                f"fighters.{corner}.{key}": value
+                                for key, value in static_fields.items()
+                            }
+                        },
+                    )
+                if scheduled_fields and collection_name == "bouts":
+                    scheduled_lookup = dict(lookup)
+                    scheduled_lookup["status"] = "scheduled"
+                    collection.update_many(
+                        scheduled_lookup,
+                        {
+                            "$set": {
+                                f"fighters.{corner}.{key}": value
+                                for key, value in scheduled_fields.items()
+                                if value is not None
+                            }
+                        },
+                    )
+
+    def _update_scheduled_fighter_ages(
+        self,
+        athlete_id: str,
+        date_of_birth_value: str | None,
+        fallback_age: int | None,
+    ):
+        date_of_birth = document_date(date_of_birth_value)
+        source_values = _source_id_values(athlete_id)
+        bouts = list(
+            self.db.bouts.find(
+                {
+                    "status": "scheduled",
+                    "$or": [
+                        {"fighters.red.espn_id": {"$in": source_values}},
+                        {"fighters.blue.espn_id": {"$in": source_values}},
+                    ],
+                },
+                {"id": 1, "event_id": 1, "fighters": 1},
+            )
+        )
+        event_ids = {bout.get("event_id") for bout in bouts}
+        events = {
+            event["id"]: event
+            for event in self.db.events.find(
+                {"id": {"$in": list(event_ids)}},
+                {"id": 1, "date": 1, "event_date": 1},
+            )
+        }
+        for bout in bouts:
+            event = events.get(bout.get("event_id")) or {}
+            event_date = document_date(event.get("date") or event.get("event_date"))
+            age = (
+                age_on_date(date_of_birth, event_date)
+                if date_of_birth and event_date
+                else fallback_age
+            )
+            if age is None:
+                continue
+            for corner in ("red", "blue"):
+                fighter = (bout.get("fighters") or {}).get(corner) or {}
+                if str(fighter.get("espn_id")) != athlete_id:
+                    continue
+                field = f"fighters.{corner}.age_at_fight_years"
+                self.db.bouts.update_one({"id": bout["id"]}, {"$set": {field: age}})
+                self.db.bout_details.update_one(
+                    {"bout_id": bout["id"]},
+                    {"$set": {field: age}},
+                )
+
+    def log_request_error(self, failure):
+        self.logger.warning("ESPN request failed: %s", failure.request.url)
+
+    def closed(self, reason):
+        self.logger.info(
+            "ESPN ETL finished: mode=%s events=%s bouts=%s results=%s profiles=%s",
+            self.mode,
+            self.processed_events,
+            self.processed_bouts,
+            self.results_loaded,
+            self.profiles_loaded,
+        )
+        self.mongo_client.close()
+
+
+class EspnFighterImagePipeline:
+    """Download ESPN 350x254 PNG headshots, upload to S3, and link snapshots."""
+
+    def __init__(self):
+        mongo_uri = os.environ.get("MONGODB_URI")
+        if not mongo_uri:
+            raise RuntimeError("MONGODB_URI is required")
+        self.mongo_client = AsyncIOMotorClient(mongo_uri)
+        self.db = self.mongo_client.ufc_picks
+        self._s3_service = None
+        self.crawler = None
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        pipeline = cls()
+        pipeline.crawler = crawler
+        return pipeline
+
+    def open_spider(self):
+        if self.crawler.spider.mode in {"general", "photos"}:
+            self._get_s3_service()
+
+    def _get_s3_service(self):
+        if self._s3_service is None:
+            missing = [
+                variable
+                for variable in (
+                    "AWS_ACCESS_KEY_ID",
+                    "AWS_SECRET_ACCESS_KEY",
+                    "AWS_S3_BUCKET",
+                )
+                if not os.environ.get(variable)
+            ]
+            if missing:
+                raise RuntimeError(
+                    f"Missing S3 variables for ESPN photos: {', '.join(missing)}"
+                )
+            from tapology_scraper.s3_service import get_s3_service
+
+            self._s3_service = get_s3_service()
+            if self._s3_service.is_read_only:
+                raise RuntimeError("IMAGE_SOURCE_MODE must be s3 for ESPN photos")
+        return self._s3_service
+
+    async def process_item(self, item):
+        if item.get("type") != "espn_fighter_image":
+            return item
+
+        spider = self.crawler.spider
+        athlete_id = str(item["espn_id"])
+        image_url = item["image_url"]
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(
+                    image_url,
+                    headers={
+                        "User-Agent": "UFC-Picks/1.0 ESPN image mirror",
+                        "Referer": "https://www.espn.com/",
+                    },
+                )
+                response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "image/png").split(";")[0]
+            extension = "png" if "png" in content_type else "jpg"
+            s3_service = self._get_s3_service()
+            s3_key = s3_service.generate_fighter_image_key(
+                f"espn-{athlete_id}",
+                extension,
+            )
+            await s3_service.upload_image(
+                s3_key=s3_key,
+                image_data=response.content,
+                content_type=content_type,
+                metadata={
+                    "espn_id": athlete_id,
+                    "fighter_name": item.get("fighter_name") or "",
+                    "source": "espn",
+                    "source_url": item.get("source_url") or image_url,
+                },
+            )
+
+            update_fields = {
+                "image_key": s3_key,
+                "image_source": "espn",
+                "espn_headshot_url": item.get("source_url") or image_url,
+                "image_updated_at": datetime.utcnow(),
+            }
+            await self.db.fighters.update_one(
+                {"_id": int(athlete_id)},
+                {"$set": update_fields},
+                upsert=True,
+            )
+            source_values = _source_id_values(athlete_id)
+            for collection_name in ("bouts", "bout_details"):
+                collection = self.db[collection_name]
+                for corner in ("red", "blue"):
+                    await collection.update_many(
+                        {f"fighters.{corner}.espn_id": {"$in": source_values}},
+                        {
+                            "$set": {
+                                f"fighters.{corner}.{key}": value
+                                for key, value in update_fields.items()
+                            }
+                        },
+                    )
+
+            spider.logger.info(
+                "Uploaded ESPN headshot for %s to %s",
+                athlete_id,
+                s3_key,
+            )
+        except Exception as error:
+            spider.logger.error(
+                "Failed ESPN headshot for %s (%s): %s",
+                athlete_id,
+                image_url,
+                error,
+            )
+        return item
+
+    def close_spider(self):
+        self.mongo_client.close()

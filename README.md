@@ -1,113 +1,100 @@
-# UFC Scraper
+# UFC Picks ETL
 
-This scraper extracts UFC fight data from Tapology.com and stores it in MongoDB.
+The primary card, result, fighter-stat, and fighter-photo source is ESPN's UFC
+JSON feed. Event posters are resolved separately from Wikipedia/original
+sources and official UFC event pages.
 
-## Features
+## Setup
 
-- Scrapes UFC events (name, date, location, etc.)
-- Extracts detailed fight information (fighters, weight, category, etc.)
-- Accesses individual fight pages to extract data:
-  - UFC Rankings
-  - Fight records
-  - Last 5 fights
-  - Betting odds
-  - Nationality
-  - Fighting out of
-  - Age at the fight
-  - Weight, height, reach
-  - Gyms
-  
-
-## Local Installation
-
-1. Install dependencies:
 ```bash
-cd scraper
 pip install -r requirements.txt
 ```
 
-2. Configure environment variables:
-Create a `.env` file in the `scraper/` directory with:
-```
-MONGODB_URI=your_mongodb_connection_here
+Required for every ESPN mode:
+
+```dotenv
+MONGODB_URI=mongodb://...
 ```
 
-## Usage
+Required when the selected mode uploads fighter photos:
 
-### Discovery Mode (automatic scraper for upcoming events)
+```dotenv
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_S3_BUCKET=...
+AWS_REGION=us-east-1
+IMAGE_SOURCE_MODE=s3
+```
+
+## ESPN modes
+
+### General
+
+Refreshes cards, source mappings, fighter profiles, records, physical stats,
+available results, scoring, and missing S3 headshots.
+
 ```bash
-cd scraper
-python -m scrapy crawl ufc
+scrapy crawl espn -a MODE=general -a DAYS_BACK=14 -a DAYS_AHEAD=60
 ```
 
-### Scraper for a specific event
+Full-season backfill:
+
 ```bash
-python -m scrapy crawl ufc -a EVENT_ID=136026
+scrapy crawl espn -a MODE=general -a SEASON=2026
 ```
 
-### Scraper for event results
+One event, using either the existing UFC Picks ID or ESPN event ID:
+
 ```bash
-python -m scrapy crawl ufc -a EVENT_ID=136026 -a MODE=results
+scrapy crawl espn -a MODE=general -a EVENT_ID=600059339
 ```
 
-### Skip fight details scraping (faster)
+### Results
+
+Finds every local UFC card with a bout still missing its result (through
+tomorrow), requests those exact ESPN dates, and recalculates pick/user scores.
+Existing results are not overwritten.
+
 ```bash
-python -m scrapy crawl ufc -a SKIP_BOUT_DETAILS=true
+scrapy crawl espn -a MODE=results
 ```
 
-## GitHub Actions
+### Photos
 
-The scraper runs automatically every day at 00:00 UTC via GitHub Actions.
+Links fighters on upcoming cards, downloads ESPN's 350x254 PNG headshots,
+uploads them to S3, and stores the resulting `image_key`.
 
-### Configure secrets in GitHub:
-
-1. Go to your repository on GitHub
-2. Settings → Secrets and variables → Actions
-3. Click "New repository secret"
-4. Add:
-   - Name: `MONGODB_URI`
-   - Secret: Your MongoDB connection URI
-
-### Manual Execution:
-
-1. Go to the "Actions" tab on GitHub
-2. Select "UFC Scraper Workflow"
-3. Click "Run workflow"
-4. Optional: specify an EVENT_ID or MODE
-
-## MongoDB Data Structure
-
-### Collection: `events`
-```json
-{
-  "id": 136026,
-  "name": "UFC 325",
-  "event_date": "2026-02-08",
-  "location": "Las Vegas, Nevada"
-}
+```bash
+scrapy crawl espn -a MODE=photos -a DAYS_AHEAD=60
 ```
 
-### Collection: `bouts`
-```json
-{
-  "id": 1074233,
-  "event_id": 136026,
-  "fighters": {
-    "red": {
-      "fighter_name": "Alexander Volkanovski",
-      "ufc_ranking": {"position": 1, "division": "Featherweight"},
-      "record_at_fight": {"wins": 27, "losses": 4, "draws": 0},
-      "height": {"cm": 168},
-      "reach": {"cm": 182},
-      "betting_odds": {"line": "-160", "description": "Slight Favorite"}
-    },
-    "blue": { /* ... */ }
-  }
-}
+Use `-a FORCE_PHOTOS=true` to replace already-mirrored ESPN headshots.
+
+## Event images
+
+```bash
+scrapy crawl event_images
 ```
 
-## Notes
+- Card poster: Wikipedia's credited original source, with the Wikipedia file
+  as fallback.
+- Wide hero: official UFC `background_image_xl_2x`.
 
-- The scraper respects robots.txt and uses delays between requests
-- Events prior to 2026-01-01 are automatically ignored
-- After 10 consecutive old events, the scraper stops pagination
+## Source-ID policy
+
+Existing UFC Picks event and bout IDs remain canonical. The ETL matches ESPN
+cards by source ID or by date/name/fighter matchup, then stores
+`espn_event_id`, `espn_competition_id`, and fighter `espn_id`. This prevents
+existing picks and frontend URLs from being invalidated.
+
+New ESPN-only cards use ESPN's numeric event and competition IDs as their
+canonical IDs.
+
+## Automation
+
+- ESPN results: every 2 hours.
+- ESPN general ETL: Monday and Thursday.
+- Event posters/heroes: daily.
+- ESPN upcoming-card photos: daily.
+
+All jobs can also be triggered manually from the GitHub Actions workflow.

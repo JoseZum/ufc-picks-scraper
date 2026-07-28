@@ -25,7 +25,6 @@ Usage:
 
 import scrapy
 import os
-import re
 import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
@@ -111,7 +110,7 @@ class FighterImagesSpider(scrapy.Spider):
         self.db = self.mongo_client.ufc_picks
 
         # Log de configuración
-        self.logger.info(f"Fighter Images Spider initialized")
+        self.logger.info("Fighter Images Spider initialized")
         if self.target_event_id:
             self.logger.info(f"📌 Filtering by event: {self.target_event_id}")
         if self.target_fighter_id:
@@ -119,7 +118,7 @@ class FighterImagesSpider(scrapy.Spider):
         if self.limit:
             self.logger.info(f"📌 Limit: {self.limit} fighters")
         if self.force_redownload:
-            self.logger.info(f"🔄 FORCE mode: Re-downloading all images for quality upgrade")
+            self.logger.info("🔄 FORCE mode: Re-downloading all images for quality upgrade")
 
     async def start(self):
         """
@@ -203,9 +202,19 @@ class FighterImagesSpider(scrapy.Spider):
                         tapology_id
                     )
                     has_stale_tapology_id = stored_tapology_id and stored_tapology_id != tapology_id
+                    has_espn_image = (
+                        fighter.get("image_source") == "espn"
+                        and fighter.get("image_key")
+                    )
 
                     # Skip si ya tiene image_key coherente en MongoDB (a menos que FORCE)
-                    if not self.force_redownload and has_matching_image_key and not has_stale_tapology_id:
+                    if (
+                        not self.force_redownload
+                        and (
+                            has_espn_image
+                            or (has_matching_image_key and not has_stale_tapology_id)
+                        )
+                    ):
                         skipped_ok += 1
                         continue
 
@@ -525,7 +534,7 @@ class FighterImagesPipeline:
 
         try:
             # Paso 1: Descargar la imagen en memoria
-            spider.logger.info(f"⬇️  Downloading image from Tapology...")
+            spider.logger.info("⬇️  Downloading image from Tapology...")
 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -571,7 +580,7 @@ class FighterImagesPipeline:
                 }
             )
 
-            spider.logger.info(f"✅ Uploaded to S3 successfully")
+            spider.logger.info("✅ Uploaded to S3 successfully")
 
             # Paso 4: Actualizar MongoDB
             # Actualizar TODOS los bouts donde este fighter aparezca (red o blue)
