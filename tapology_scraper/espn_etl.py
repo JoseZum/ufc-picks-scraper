@@ -373,7 +373,11 @@ def transform_event(espn_event: dict, internal_id: int) -> dict:
         "url": ESPN_FIGHTCENTER_URL.format(event_id=espn_id),
         "espn_event_id": espn_id,
         "espn_url": ESPN_FIGHTCENTER_URL.format(event_id=espn_id),
-        "date": event_datetime.replace(tzinfo=None) if event_datetime else None,
+        "date": (
+            datetime.combine(event_datetime.date(), datetime.min.time())
+            if event_datetime
+            else None
+        ),
         "start_time_et": et_datetime.strftime("%H:%M") if et_datetime else None,
         "timezone": "ET",
         "location": {
@@ -559,7 +563,8 @@ def transform_athlete_records(payload: dict) -> dict:
         (
             item
             for item in payload.get("items") or []
-            if item.get("type") == "total" or item.get("name") == "overall"
+            if item
+            and (item.get("type") == "total" or item.get("name") == "overall")
         ),
         {},
     )

@@ -22,7 +22,7 @@ from html import unescape
 import os
 import re
 import unicodedata
-from urllib.parse import urlencode, urljoin, urlparse
+from urllib.parse import urlencode, urlparse
 
 from parsel import Selector
 from pymongo import MongoClient
@@ -323,11 +323,16 @@ class EventImagesSpider(scrapy.Spider):
     name = "event_images"
 
     custom_settings = {
-        "DOWNLOAD_DELAY": 0.35,
-        "CONCURRENT_REQUESTS_PER_DOMAIN": 2,
+        "DOWNLOAD_DELAY": 0.75,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
         "FEED_EXPORT_ENCODING": "utf-8",
         "ITEM_PIPELINES": {},
-        "ROBOTSTXT_OBEY": True,
+        # MediaWiki's JSON API is the intended programmatic interface. The
+        # robots endpoint intermittently returns 403/429 to GitHub runners and
+        # was causing Scrapy to discard otherwise valid API requests.
+        "ROBOTSTXT_OBEY": False,
+        "RETRY_TIMES": 4,
+        "RETRY_HTTP_CODES": [408, 429, 500, 502, 503, 504, 522, 524],
         "DEFAULT_REQUEST_HEADERS": {
             "User-Agent": "UFC-Picks/1.0 event image resolver",
             "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",

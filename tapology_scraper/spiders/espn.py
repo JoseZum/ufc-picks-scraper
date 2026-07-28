@@ -838,6 +838,7 @@ class EspnFighterImagePipeline:
         self.db = self.mongo_client.ufc_picks
         self._s3_service = None
         self.crawler = None
+        self.failed_uploads = 0
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -939,6 +940,7 @@ class EspnFighterImagePipeline:
                 s3_key,
             )
         except Exception as error:
+            self.failed_uploads += 1
             spider.logger.error(
                 "Failed ESPN headshot for %s (%s): %s",
                 athlete_id,
@@ -949,3 +951,7 @@ class EspnFighterImagePipeline:
 
     def close_spider(self):
         self.mongo_client.close()
+        if self.failed_uploads:
+            raise RuntimeError(
+                f"{self.failed_uploads} ESPN headshots failed to upload"
+            )

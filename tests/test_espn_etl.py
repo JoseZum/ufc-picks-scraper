@@ -13,6 +13,7 @@ from tapology_scraper.espn_etl import (
     transform_athlete_profile,
     transform_athlete_records,
     transform_competition_metadata,
+    transform_event,
     transform_result,
 )
 
@@ -43,6 +44,18 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_event_date_is_normalized_for_backend_date_schema(self):
+        event = transform_event(
+            {
+                "id": "600059339",
+                "name": "UFC Fight Night: Medic vs. Rodriguez",
+                "date": "2026-08-01T18:00Z",
+                "competitions": [],
+            },
+            135755,
+        )
+        self.assertEqual(event["date"], datetime(2026, 8, 1))
+
     def test_matches_event_by_date_and_accent_insensitive_name(self):
         espn_event = {
             "id": "600059339",
@@ -163,6 +176,13 @@ class EspnEtlTests(unittest.TestCase):
         self.assertEqual(result["current_record"]["wins"], 13)
         self.assertEqual(result["career_stats"]["wins_by_ko_tko"], 11)
         self.assertEqual(result["career_stats"]["wins_by_submission"], 2)
+
+    def test_records_ignore_null_items_from_espn(self):
+        result = transform_athlete_records({"items": [None]})
+        self.assertEqual(
+            result["current_record"],
+            {"wins": 0, "losses": 0, "draws": 0, "no_contests": 0},
+        )
 
     def test_pick_scoring_is_accent_insensitive(self):
         pick = {
