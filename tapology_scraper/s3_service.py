@@ -8,6 +8,7 @@ No depende del backend, obtiene configuración directamente de variables de ento
 import os
 from io import BytesIO
 from typing import Optional
+import unicodedata
 
 
 class S3ServiceError(Exception):
@@ -148,8 +149,15 @@ class S3Service:
 
         # Agregar metadata si existe (convertir valores a strings)
         if metadata:
-            # S3 metadata solo acepta strings
-            str_metadata = {k: str(v) for k, v in metadata.items()}
+            # S3 user metadata only accepts US-ASCII values. Fighter names
+            # remain Unicode in Mongo; only the auxiliary object metadata is
+            # transliterated here.
+            str_metadata = {
+                k: unicodedata.normalize("NFKD", str(v))
+                .encode("ascii", "ignore")
+                .decode("ascii")
+                for k, v in metadata.items()
+            }
             upload_params["Metadata"] = str_metadata
 
         # Subir a S3
