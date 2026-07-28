@@ -72,6 +72,29 @@ class EspnEtlTests(unittest.TestCase):
         ]
         self.assertEqual(find_event_match(espn_event, existing)["id"], 135755)
 
+    def test_prefers_unique_canonical_event_over_generated_espn_duplicate(self):
+        espn_event = {
+            "id": "600060621",
+            "name": "UFC Fight Night: Gamrot vs. Salkilld",
+            "date": "2026-08-08T12:00Z",
+        }
+        existing = [
+            {
+                "id": 143855,
+                "source": "tapology",
+                "name": "UFC Fight Night",
+                "date": datetime(2026, 8, 8),
+            },
+            {
+                "id": 600060621,
+                "source": "espn",
+                "espn_event_id": "600060621",
+                "name": "UFC Fight Night: Gamrot vs. Salkilld",
+                "date": datetime(2026, 8, 8, 12),
+            },
+        ]
+        self.assertEqual(find_event_match(espn_event, existing)["id"], 143855)
+
     def test_matches_bout_regardless_of_existing_corner_order(self):
         competition = {
             "id": "401870843",

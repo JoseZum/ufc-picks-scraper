@@ -253,12 +253,73 @@ class EspnSpider(scrapy.Spider):
                 )
                 continue
 
+            if self.mode == "general" and existing_event:
+                self._remove_safe_espn_duplicate(espn_event, existing_event)
+
             internal_event = self._upsert_event(espn_event, existing_event)
             if not internal_event:
                 continue
 
             self.processed_events += 1
             yield from self._process_card(espn_event, internal_event)
+
+    def _remove_safe_espn_duplicate(
+        self,
+        espn_event: dict,
+        canonical_event: dict,
+    ):
+        espn_id = str(espn_event.get("id") or "")
+        if not espn_id.isdigit() or int(espn_id) == canonical_event.get("id"):
+            return
+
+        duplicate = self.db.events.find_one(
+            {
+                "id": int(espn_id),
+                "source": "espn",
+                "espn_event_id": espn_id,
+            }
+        )
+        if not duplicate:
+            return
+
+        duplicate_bout_ids = self.db.bouts.distinct(
+            "id",
+            {"event_id": int(espn_id), "source": "espn"},
+        )
+        pick_query = {"event_id": int(espn_id)}
+        if duplicate_bout_ids:
+            pick_query = {
+                "$or": [
+                    pick_query,
+                    {"bout_id": {"$in": duplicate_bout_ids}},
+                ]
+            }
+        if self.db.picks.find_one(pick_query, {"_id": 1}):
+            self.logger.error(
+                "Refusing to remove duplicate ESPN event %s because it has picks",
+                espn_id,
+            )
+            return
+
+        self.db.bout_details.delete_many(
+            {"bout_id": {"$in": duplicate_bout_ids}}
+        )
+        self.db.event_card_slots.delete_many({"event_id": int(espn_id)})
+        self.db.bouts.delete_many(
+            {"event_id": int(espn_id), "source": "espn"}
+        )
+        self.db.events.delete_one(
+            {
+                "id": int(espn_id),
+                "source": "espn",
+                "espn_event_id": espn_id,
+            }
+        )
+        self.logger.warning(
+            "Removed safe ESPN duplicate event %s in favor of canonical event %s",
+            espn_id,
+            canonical_event.get("id"),
+        )
 
     def _is_target_event(self, espn_event: dict) -> bool:
         if str(espn_event.get("id")) == self.target_event_id:

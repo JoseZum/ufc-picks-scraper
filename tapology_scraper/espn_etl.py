@@ -120,9 +120,11 @@ def espn_event_date(event: dict) -> date | None:
 
 def find_event_match(espn_event: dict, existing_events: list[dict]) -> dict | None:
     espn_id = str(espn_event.get("id") or "")
+    direct_match = None
     for event in existing_events:
         if str(event.get("espn_event_id") or "") == espn_id:
-            return event
+            direct_match = event
+            break
 
     target_date = espn_event_date(espn_event)
     date_matches = [
@@ -130,8 +132,21 @@ def find_event_match(espn_event: dict, existing_events: list[dict]) -> dict | No
         for event in existing_events
         if document_date(event.get("date") or event.get("event_date")) == target_date
     ]
+    if direct_match:
+        canonical_matches = [
+            event
+            for event in date_matches
+            if event.get("id") != direct_match.get("id")
+            and event.get("source") != "espn"
+        ]
+        if direct_match.get("source") == "espn" and len(canonical_matches) == 1:
+            return canonical_matches[0]
+        return direct_match
+
     if not date_matches:
         return None
+    if len(date_matches) == 1:
+        return date_matches[0]
 
     candidate = max(
         date_matches,
