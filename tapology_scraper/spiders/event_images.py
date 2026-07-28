@@ -16,6 +16,7 @@ is never reconciled or deleted by this spider.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from html import unescape
@@ -26,6 +27,7 @@ from urllib.parse import urlencode, urlparse
 
 from parsel import Selector
 from pymongo import MongoClient
+import requests
 import scrapy
 
 
@@ -262,6 +264,34 @@ def poster_needs_wikipedia_refresh(event: dict) -> bool:
         host == suffix or host.endswith(f".{suffix}")
         for suffix in _EXPIRING_IMAGE_HOST_SUFFIXES
     )
+
+
+def image_response_is_valid(status_code: int, content_type: str | None) -> bool:
+    return (
+        200 <= status_code < 300
+        and str(content_type or "").lower().startswith("image/")
+    )
+
+
+def image_url_is_live(url: str) -> bool:
+    """Check the actual image response without downloading the whole asset."""
+    try:
+        with requests.get(
+            url,
+            allow_redirects=True,
+            stream=True,
+            timeout=15,
+            headers={
+                "Range": "bytes=0-1023",
+                "User-Agent": "UFC-Picks/1.0 event image validator",
+            },
+        ) as response:
+            return image_response_is_valid(
+                response.status_code,
+                response.headers.get("content-type"),
+            )
+    except requests.RequestException:
+        return False
 
 
 def is_supported_source_page(url: str | None) -> bool:
@@ -803,6 +833,7 @@ class EventImagesSpider(scrapy.Spider):
     def closed(self, reason):
         missing_posters: list[int] = []
         missing_heroes: list[int] = []
+        event_images: dict[int, tuple[str | None, str | None]] = {}
         for event_id in self.events:
             event = self.db.events.find_one(
                 {"id": event_id},
@@ -820,13 +851,38 @@ class EventImagesSpider(scrapy.Spider):
                 or event.get("hero_image_source") != "ufc_official_xl_2x"
             ):
                 missing_heroes.append(event_id)
+            event_images[event_id] = (
+                event.get("poster_image_url"),
+                event.get("hero_image_url"),
+            )
 
-        if missing_posters or missing_heroes:
+        urls = {
+            url
+            for images in event_images.values()
+            for url in images
+            if isinstance(url, str) and url.startswith(("https://", "http://"))
+        }
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            live_urls = dict(zip(urls, executor.map(image_url_is_live, urls)))
+        broken_posters = [
+            event_id
+            for event_id, (poster_url, _) in event_images.items()
+            if poster_url and not live_urls.get(poster_url, False)
+        ]
+        broken_heroes = [
+            event_id
+            for event_id, (_, hero_url) in event_images.items()
+            if hero_url and not live_urls.get(hero_url, False)
+        ]
+
+        if missing_posters or missing_heroes or broken_posters or broken_heroes:
             self.logger.error(
                 "EVENT_IMAGE_COVERAGE_FAILED missing_posters=%s "
-                "missing_heroes=%s",
+                "missing_heroes=%s broken_posters=%s broken_heroes=%s",
                 missing_posters,
                 missing_heroes,
+                broken_posters,
+                broken_heroes,
             )
         else:
             self.logger.info(

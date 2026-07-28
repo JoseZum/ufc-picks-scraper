@@ -10,6 +10,7 @@ from tapology_scraper.spiders.event_images import (
     extract_ufc_event_date,
     extract_ufc_hero_url,
     event_is_in_image_window,
+    image_response_is_valid,
     is_supported_source_page,
     poster_is_displayable,
     poster_needs_wikipedia_refresh,
@@ -204,6 +205,12 @@ class EventImageResolverTests(unittest.TestCase):
             "poster_image_url": "https://images.tapology.com/old.jpg",
         }
         self.assertFalse(poster_is_displayable(event))
+
+    def test_image_validator_requires_successful_image_content(self):
+        self.assertTrue(image_response_is_valid(200, "image/jpeg"))
+        self.assertTrue(image_response_is_valid(206, "image/png"))
+        self.assertFalse(image_response_is_valid(404, "image/jpeg"))
+        self.assertFalse(image_response_is_valid(200, "text/html"))
 
     def test_image_refresh_window_includes_current_upcoming_cards(self):
         self.assertTrue(
