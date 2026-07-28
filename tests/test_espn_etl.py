@@ -16,6 +16,7 @@ from tapology_scraper.espn_etl import (
     transform_event,
     transform_result,
 )
+from tapology_scraper.spiders.espn import event_has_all_results, has_fight_result
 
 
 def competitor(
@@ -44,6 +45,27 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_event_completes_when_expected_results_are_present(self):
+        bouts = [
+            {"id": 1, "status": "completed", "result": {"winner": "red"}},
+            {"id": 2, "status": "completed", "result": {"winner": "blue"}},
+            # A stale local fight removed from the final ESPN card must not
+            # keep an otherwise fully resulted card live forever.
+            {"id": 3, "status": "scheduled", "result": None},
+        ]
+        self.assertTrue(event_has_all_results(bouts, expected_total=2))
+        self.assertTrue(has_fight_result(bouts[0]))
+        self.assertFalse(has_fight_result(bouts[2]))
+
+    def test_event_without_expected_total_requires_every_active_result(self):
+        bouts = [
+            {"status": "completed", "result": {"winner": "red"}},
+            {"status": "scheduled", "result": None},
+        ]
+        self.assertFalse(event_has_all_results(bouts))
+        bouts[1]["status"] = "cancelled"
+        self.assertTrue(event_has_all_results(bouts))
+
     def test_event_date_is_normalized_for_backend_date_schema(self):
         event = transform_event(
             {

@@ -1,4 +1,5 @@
 import unittest
+from datetime import date, datetime
 
 from scrapy.http import HtmlResponse, Request
 
@@ -7,6 +8,7 @@ from tapology_scraper.spiders.event_images import (
     extract_credit_url,
     extract_source_image_url,
     extract_ufc_hero_url,
+    event_is_in_image_window,
     is_supported_source_page,
     select_wikipedia_article,
     select_wikipedia_candidate,
@@ -155,6 +157,20 @@ class EventImageResolverTests(unittest.TestCase):
         self.assertEqual(
             extract_ufc_hero_url(response),
             "https://ufc.com/images/styles/background_image_xl_2x/s3/art.jpg",
+        )
+
+    def test_image_refresh_window_includes_current_upcoming_cards(self):
+        self.assertTrue(
+            event_is_in_image_window(
+                {"date": datetime(2026, 8, 22)},
+                today=date(2026, 7, 28),
+            )
+        )
+        self.assertFalse(
+            event_is_in_image_window(
+                {"date": datetime(2025, 8, 22)},
+                today=date(2026, 7, 28),
+            )
         )
 
 

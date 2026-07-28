@@ -16,7 +16,7 @@ is never reconciled or deleted by this spider.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from html import unescape
 import os
@@ -52,6 +52,9 @@ _X_SOURCE_PAGE_HOSTS = {
     "x.com",
     "www.x.com",
 }
+_WIKIPEDIA_POSTER_SOURCES = {"wikipedia_source", "wikipedia_file"}
+_IMAGE_WINDOW_DAYS_BACK = 14
+_IMAGE_WINDOW_DAYS_AHEAD = 75
 
 
 def _ascii_text(value: str | None) -> str:
@@ -307,6 +310,25 @@ def _event_date_string(event: dict) -> str | None:
     return None
 
 
+def event_is_in_image_window(
+    event: dict,
+    today: date | None = None,
+    days_back: int = _IMAGE_WINDOW_DAYS_BACK,
+    days_ahead: int = _IMAGE_WINDOW_DAYS_AHEAD,
+) -> bool:
+    """Limit scheduled refreshes to cards the UI can currently surface."""
+    date_string = _event_date_string(event)
+    if not date_string:
+        return False
+    event_date = date.fromisoformat(date_string)
+    current_date = today or date.today()
+    return (
+        current_date - timedelta(days=days_back)
+        <= event_date
+        <= current_date + timedelta(days=days_ahead)
+    )
+
+
 def _page_event_name(response) -> str:
     heading = " ".join(response.css("h1 ::text, h1::text").getall())
     matchup = " ".join(
@@ -340,7 +362,7 @@ class EventImagesSpider(scrapy.Spider):
         },
     }
 
-    def __init__(self, EVENT_ID=None, *args, **kwargs):
+    def __init__(self, EVENT_ID=None, FORCE=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         mongo_uri = os.environ.get("MONGODB_URI")
         if not mongo_uri:
@@ -349,6 +371,7 @@ class EventImagesSpider(scrapy.Spider):
         self.mongo_client = MongoClient(mongo_uri)
         self.db = self.mongo_client.ufc_picks
         self.target_event_id = int(EVENT_ID) if EVENT_ID else None
+        self.force = str(FORCE or "").lower() in {"1", "true", "yes"}
         self.events: dict[int, dict] = {}
         self.events_by_date: dict[str, list[dict]] = {}
         self.requested_official_urls: set[str] = set()
@@ -366,8 +389,16 @@ class EventImagesSpider(scrapy.Spider):
             "event_date": 1,
             "official_url": 1,
             "url": 1,
+            "status": 1,
+            "poster_image_url": 1,
+            "poster_image_source": 1,
+            "hero_image_url": 1,
+            "hero_image_source": 1,
         }
         for event in self.db.events.find(query, projection):
+            if self.target_event_id is None and not event_is_in_image_window(event):
+                continue
+
             event_id = int(event.get("id") or event["_id"])
             event["id"] = event_id
             self.events[event_id] = event
@@ -375,12 +406,19 @@ class EventImagesSpider(scrapy.Spider):
             if date_string:
                 self.events_by_date.setdefault(date_string, []).append(event)
 
-            yield self._wikipedia_article_request(event)
+            if self.force or (
+                event.get("poster_image_source") not in _WIKIPEDIA_POSTER_SOURCES
+            ):
+                yield self._wikipedia_article_request(event)
 
             official_url = event.get("official_url")
             if not official_url and "ufc.com/event/" in str(event.get("url", "")):
                 official_url = event["url"]
-            if official_url:
+            if official_url and (
+                self.force
+                or event.get("hero_image_source") != "ufc_official_xl_2x"
+                or not event.get("hero_image_url")
+            ):
                 official_url = official_url.replace("www.ufc.com", "www.ufcespanol.com")
                 self.requested_official_urls.add(official_url)
                 yield scrapy.Request(
@@ -390,6 +428,12 @@ class EventImagesSpider(scrapy.Spider):
                     cb_kwargs={"event_id": event_id},
                     dont_filter=True,
                 )
+            elif (
+                event.get("hero_image_url")
+                and event.get("hero_image_source") == "ufc_official_xl_2x"
+                and not event.get("poster_image_url")
+            ):
+                self._save_official_poster_fallback(event_id, event["hero_image_url"])
 
         if not self.events:
             self.logger.warning("No UFC events found for image refresh")
@@ -592,7 +636,26 @@ class EventImagesSpider(scrapy.Spider):
             "poster_image_updated_at": datetime.utcnow(),
         }
         self.db.events.update_one({"id": event_id}, {"$set": fields})
+        self.events[event_id].update(fields)
         self.logger.info("Updated card poster for event %s from %s", event_id, image_source)
+
+    def _save_official_poster_fallback(self, event_id: int, hero_url: str):
+        """Keep cards visible until Wikipedia publishes a usable event poster."""
+        event = self.events[event_id]
+        if event.get("poster_image_source") in _WIKIPEDIA_POSTER_SOURCES:
+            return
+
+        fields = {
+            "poster_image_url": hero_url,
+            "poster_image_source": "ufc_official_fallback",
+            "poster_image_updated_at": datetime.utcnow(),
+        }
+        self.db.events.update_one({"id": event_id}, {"$set": fields})
+        event.update(fields)
+        self.logger.info(
+            "Using official UFC hero as temporary card poster for event %s",
+            event_id,
+        )
 
     def parse_ufc_index(self, response):
         seen: set[str] = set()
@@ -619,17 +682,18 @@ class EventImagesSpider(scrapy.Spider):
         if event is None:
             return
 
+        fields = {
+            "hero_image_url": hero_url,
+            "hero_image_source": "ufc_official_xl_2x",
+            "hero_image_updated_at": datetime.utcnow(),
+            "official_url": response.url,
+        }
         self.db.events.update_one(
             {"id": event["id"]},
-            {
-                "$set": {
-                    "hero_image_url": hero_url,
-                    "hero_image_source": "ufc_official_xl_2x",
-                    "hero_image_updated_at": datetime.utcnow(),
-                    "official_url": response.url,
-                }
-            },
+            {"$set": fields},
         )
+        event.update(fields)
+        self._save_official_poster_fallback(event["id"], hero_url)
         self.logger.info("Updated UFC hero for event %s", event["id"])
 
     def _match_ufc_event(self, response) -> dict | None:
@@ -654,4 +718,36 @@ class EventImagesSpider(scrapy.Spider):
         self.logger.warning("Image metadata request failed: %s", failure.request.url)
 
     def closed(self, reason):
+        missing_posters: list[int] = []
+        missing_heroes: list[int] = []
+        for event_id in self.events:
+            event = self.db.events.find_one(
+                {"id": event_id},
+                {
+                    "poster_image_url": 1,
+                    "poster_image_source": 1,
+                    "hero_image_url": 1,
+                    "hero_image_source": 1,
+                },
+            ) or {}
+            if not event.get("poster_image_url"):
+                missing_posters.append(event_id)
+            if (
+                not event.get("hero_image_url")
+                or event.get("hero_image_source") != "ufc_official_xl_2x"
+            ):
+                missing_heroes.append(event_id)
+
+        if missing_posters or missing_heroes:
+            self.logger.error(
+                "EVENT_IMAGE_COVERAGE_FAILED missing_posters=%s "
+                "missing_heroes=%s",
+                missing_posters,
+                missing_heroes,
+            )
+        else:
+            self.logger.info(
+                "Event image coverage complete for %s cards",
+                len(self.events),
+            )
         self.mongo_client.close()

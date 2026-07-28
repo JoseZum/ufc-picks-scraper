@@ -74,6 +74,25 @@ def _non_empty_fields(fields: dict) -> dict:
     }
 
 
+def has_fight_result(bout: dict) -> bool:
+    """Treat only a non-empty result document as a finished fight."""
+    return isinstance(bout.get("result"), dict) and bool(bout["result"])
+
+
+def event_has_all_results(
+    bouts: list[dict],
+    expected_total: int | None = None,
+) -> bool:
+    """Decide completion from fight results, not ESPN's event-level flag."""
+    active_bouts = [
+        bout for bout in bouts if bout.get("status") != "cancelled"
+    ]
+    result_count = sum(has_fight_result(bout) for bout in active_bouts)
+    if expected_total and expected_total > 0:
+        return result_count >= expected_total
+    return bool(active_bouts) and result_count == len(active_bouts)
+
+
 class EspnSpider(scrapy.Spider):
     name = "espn"
     allowed_domains = [
@@ -133,6 +152,13 @@ class EspnSpider(scrapy.Spider):
         self.profiles_loaded = 0
 
     async def start(self):
+        reconciled = self._reconcile_fully_resulted_events()
+        if reconciled:
+            self.logger.info(
+                "Immediately completed %s cards that already had every result",
+                reconciled,
+            )
+
         if self.mode == "results" and not self.target_event_id and not self.season:
             pending_dates = self._pending_result_dates()
             if not pending_dates:
@@ -190,6 +216,61 @@ class EspnSpider(scrapy.Spider):
             and parsed_date <= latest_date
         }
         return sorted(pending_dates)
+
+    def _reconcile_fully_resulted_events(self) -> int:
+        """Repair past cards whose fights are done but event status stayed scheduled."""
+        reconciled = 0
+        latest_date = date.today() + timedelta(days=1)
+        cursor = self.db.events.find(
+            {
+                "status": {"$ne": "completed"},
+                "name": {"$regex": r"\bUFC\b", "$options": "i"},
+            },
+            {"id": 1, "date": 1, "event_date": 1, "total_bouts": 1},
+        )
+        for event in cursor:
+            event_date = document_date(
+                event.get("date") or event.get("event_date")
+            )
+            if not event_date or event_date > latest_date:
+                continue
+
+            event_id = int(event["id"])
+            bouts = list(self.db.bouts.find({"event_id": event_id}))
+            expected_total = int(event.get("total_bouts") or 0) or None
+            if not event_has_all_results(bouts, expected_total):
+                continue
+
+            self._finish_event_and_bouts(event_id, bouts)
+            reconciled += 1
+        return reconciled
+
+    def _finish_event_and_bouts(self, event_id: int, bouts: list[dict]):
+        result_ids = [bout["id"] for bout in bouts if has_fight_result(bout)]
+        stale_ids = [
+            bout["id"]
+            for bout in bouts
+            if bout.get("status") != "cancelled" and not has_fight_result(bout)
+        ]
+        if result_ids:
+            self.db.bouts.update_many(
+                {"id": {"$in": result_ids}},
+                {"$set": {"status": "completed"}},
+            )
+        if stale_ids:
+            self.db.bouts.update_many(
+                {"id": {"$in": stale_ids}},
+                {"$set": {"status": "cancelled"}},
+            )
+        self.db.events.update_one(
+            {"id": event_id},
+            {
+                "$set": {
+                    "status": "completed",
+                    "espn_last_updated": datetime.utcnow(),
+                }
+            },
+        )
 
     def _date_query(self) -> str:
         if self.season:
@@ -392,6 +473,7 @@ class EspnSpider(scrapy.Spider):
         competitions = espn_event.get("competitions") or []
         existing_bouts = list(self.db.bouts.find({"event_id": event_id}))
         main_event_bout_id = None
+        matched_bout_ids: set[int] = set()
 
         for index, competition in enumerate(competitions):
             existing_bout = find_bout_match(competition, existing_bouts)
@@ -422,6 +504,7 @@ class EspnSpider(scrapy.Spider):
                 continue
 
             self.processed_bouts += 1
+            matched_bout_ids.add(int(existing_bout["id"]))
             corner_mapping = map_competitors_to_corners(competition, existing_bout)
             self._link_competitors(existing_bout, competition, corner_mapping)
 
@@ -460,16 +543,34 @@ class EspnSpider(scrapy.Spider):
         if main_event_bout_id:
             event_update["main_event_bout_id"] = main_event_bout_id
 
-        if event_status(espn_event) == "completed":
-            unresolved = self.db.bouts.count_documents(
-                {
-                    "event_id": event_id,
-                    "status": {"$nin": ["completed", "cancelled"]},
-                }
-            )
-            if unresolved == 0:
-                event_update["status"] = "completed"
         self.db.events.update_one({"id": event_id}, {"$set": event_update})
+
+        current_bouts = list(self.db.bouts.find({"event_id": event_id}))
+        matched_bouts = [
+            bout
+            for bout in current_bouts
+            if int(bout["id"]) in matched_bout_ids
+        ]
+        if event_has_all_results(matched_bouts, len(competitions)):
+            # Once every fight ESPN lists has a result, unmatched local bouts
+            # are cancelled/removed-from-card fights, not pending results.
+            self._finish_event_and_bouts(event_id, current_bouts)
+        elif event_status(espn_event) == "completed":
+            unmatched_ids = [
+                bout["id"]
+                for bout in current_bouts
+                if int(bout["id"]) not in matched_bout_ids
+                and bout.get("status") != "cancelled"
+                and not has_fight_result(bout)
+            ]
+            if unmatched_ids:
+                self.db.bouts.update_many(
+                    {"id": {"$in": unmatched_ids}},
+                    {"$set": {"status": "cancelled"}},
+                )
+                current_bouts = list(self.db.bouts.find({"event_id": event_id}))
+            if event_has_all_results(current_bouts):
+                self._finish_event_and_bouts(event_id, current_bouts)
 
     def _link_competitors(
         self,

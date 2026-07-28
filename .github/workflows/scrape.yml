@@ -86,7 +86,10 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Resolve Wikipedia card posters and official UFC heroes
-        run: scrapy crawl event_images
+        run: |
+          set -o pipefail
+          scrapy crawl event_images 2>&1 | tee event-images.log
+          ! grep -Eq "EVENT_IMAGE_COVERAGE_FAILED|spider_exceptions/count" event-images.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
