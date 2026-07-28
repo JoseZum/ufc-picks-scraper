@@ -11,6 +11,8 @@ from tapology_scraper.spiders.event_images import (
     extract_ufc_hero_url,
     event_is_in_image_window,
     is_supported_source_page,
+    poster_is_displayable,
+    poster_needs_wikipedia_refresh,
     select_wikipedia_article,
     select_wikipedia_candidate,
 )
@@ -177,6 +179,31 @@ class EventImageResolverTests(unittest.TestCase):
             """,
         )
         self.assertEqual(extract_ufc_event_date(response), "2026-08-15")
+
+    def test_signed_instagram_source_is_refreshed_before_it_expires(self):
+        event = {
+            "poster_image_source": "wikipedia_source",
+            "poster_image_url": (
+                "https://scontent-sjc6-1.cdninstagram.com/poster.jpg?oe=123"
+            ),
+        }
+        self.assertTrue(poster_is_displayable(event))
+        self.assertTrue(poster_needs_wikipedia_refresh(event))
+
+    def test_stable_wikipedia_source_does_not_need_daily_refresh(self):
+        event = {
+            "poster_image_source": "wikipedia_source",
+            "poster_image_url": "https://pbs.twimg.com/media/poster.jpg:large",
+        }
+        self.assertTrue(poster_is_displayable(event))
+        self.assertFalse(poster_needs_wikipedia_refresh(event))
+
+    def test_legacy_poster_source_is_not_counted_as_coverage(self):
+        event = {
+            "poster_image_source": "tapology",
+            "poster_image_url": "https://images.tapology.com/old.jpg",
+        }
+        self.assertFalse(poster_is_displayable(event))
 
     def test_image_refresh_window_includes_current_upcoming_cards(self):
         self.assertTrue(

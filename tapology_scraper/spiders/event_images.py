@@ -53,6 +53,14 @@ _X_SOURCE_PAGE_HOSTS = {
     "www.x.com",
 }
 _WIKIPEDIA_POSTER_SOURCES = {"wikipedia_source", "wikipedia_file"}
+_DISPLAYABLE_POSTER_SOURCES = {
+    *_WIKIPEDIA_POSTER_SOURCES,
+    "ufc_official_fallback",
+}
+_EXPIRING_IMAGE_HOST_SUFFIXES = (
+    "cdninstagram.com",
+    "fbcdn.net",
+)
 _IMAGE_WINDOW_DAYS_BACK = 14
 _IMAGE_WINDOW_DAYS_AHEAD = 75
 _MONTH_NUMBERS = {
@@ -232,6 +240,28 @@ def is_direct_image_url(url: str | None) -> bool:
         return False
     path = urlparse(url).path.lower()
     return path.endswith(_DIRECT_IMAGE_EXTENSIONS) or "pbs.twimg.com/media/" in url
+
+
+def poster_is_displayable(event: dict) -> bool:
+    url = event.get("poster_image_url")
+    return (
+        event.get("poster_image_source") in _DISPLAYABLE_POSTER_SOURCES
+        and isinstance(url, str)
+        and url.startswith(("https://", "http://"))
+    )
+
+
+def poster_needs_wikipedia_refresh(event: dict) -> bool:
+    """Refresh missing/fallback posters and signed social-CDN source URLs."""
+    if event.get("poster_image_source") not in _WIKIPEDIA_POSTER_SOURCES:
+        return True
+    host = (
+        urlparse(str(event.get("poster_image_url") or "")).hostname or ""
+    ).lower()
+    return any(
+        host == suffix or host.endswith(f".{suffix}")
+        for suffix in _EXPIRING_IMAGE_HOST_SUFFIXES
+    )
 
 
 def is_supported_source_page(url: str | None) -> bool:
@@ -458,9 +488,7 @@ class EventImagesSpider(scrapy.Spider):
             if date_string:
                 self.events_by_date.setdefault(date_string, []).append(event)
 
-            if self.force or (
-                event.get("poster_image_source") not in _WIKIPEDIA_POSTER_SOURCES
-            ):
+            if self.force or poster_needs_wikipedia_refresh(event):
                 yield self._wikipedia_article_request(event)
 
             official_url = event.get("official_url")
@@ -483,7 +511,7 @@ class EventImagesSpider(scrapy.Spider):
             elif (
                 event.get("hero_image_url")
                 and event.get("hero_image_source") == "ufc_official_xl_2x"
-                and not event.get("poster_image_url")
+                and not poster_is_displayable(event)
             ):
                 self._save_official_poster_fallback(event_id, event["hero_image_url"])
 
@@ -785,7 +813,7 @@ class EventImagesSpider(scrapy.Spider):
                     "hero_image_source": 1,
                 },
             ) or {}
-            if not event.get("poster_image_url"):
+            if not poster_is_displayable(event):
                 missing_posters.append(event_id)
             if (
                 not event.get("hero_image_url")
