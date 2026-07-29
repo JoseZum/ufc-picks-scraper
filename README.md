@@ -2,7 +2,7 @@
 
 <img src="./public/ufcscraper-logo.png" alt="UFC Picks Data Pipeline" width="400">
 
-# UFC Picks - Web Scraper
+# 
 
 ### Automated UFC event ingestion, enrichment, and result synchronization.
 
