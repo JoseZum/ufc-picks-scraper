@@ -54,6 +54,9 @@ _X_SOURCE_PAGE_HOSTS = {
     "x.com",
     "www.x.com",
 }
+_INSTAGRAM_SOURCE_HOST_SUFFIXES = (
+    "instagram.com",
+)
 _WIKIPEDIA_POSTER_SOURCES = {"wikipedia_source", "wikipedia_file"}
 _DISPLAYABLE_POSTER_SOURCES = {
     *_WIKIPEDIA_POSTER_SOURCES,
@@ -310,8 +313,39 @@ def is_x_source_page(url: str | None) -> bool:
     return (urlparse(url).hostname or "").lower() in _X_SOURCE_PAGE_HOSTS
 
 
+def is_instagram_source_page(url: str | None) -> bool:
+    if not url:
+        return False
+    host = (urlparse(url).hostname or "").lower()
+    return any(
+        host == suffix or host.endswith(f".{suffix}")
+        for suffix in _INSTAGRAM_SOURCE_HOST_SUFFIXES
+    )
+
+
+def instagram_embed_url(url: str | None) -> str | None:
+    """Return Instagram's public embed page, which exposes the uncropped image."""
+    if not is_instagram_source_page(url):
+        return None
+
+    parsed = urlparse(str(url))
+    path_parts = [part for part in parsed.path.split("/") if part]
+    for index, part in enumerate(path_parts):
+        if part in {"p", "reel", "tv"} and index + 1 < len(path_parts):
+            shortcode = path_parts[index + 1]
+            return f"{parsed.scheme}://{parsed.netloc}/{part}/{shortcode}/embed/"
+    return None
+
+
 def extract_source_image_url(response) -> str | None:
     """Extract the original poster URL from an allowed source page."""
+    if is_instagram_source_page(response.url):
+        # The normal Instagram page exposes a square social preview. Its
+        # public embed page exposes the original 4:5 image as this element.
+        embedded_image = response.css("img.EmbeddedMediaImage::attr(src)").get()
+        if embedded_image and is_direct_image_url(embedded_image):
+            return response.urljoin(unescape(embedded_image))
+
     meta_selectors = (
         'meta[property="og:image:secure_url"]::attr(content)',
         'meta[property="og:image"]::attr(content)',
@@ -678,13 +712,14 @@ class EventImagesSpider(scrapy.Spider):
             return
 
         if is_supported_source_page(source_page_url):
+            request_url = instagram_embed_url(source_page_url) or source_page_url
             request_meta = (
                 {"dont_obey_robotstxt": True}
                 if is_x_source_page(source_page_url)
                 else {}
             )
             yield scrapy.Request(
-                source_page_url,
+                request_url,
                 callback=self.parse_poster_source,
                 errback=self.poster_source_error,
                 # Wikipedia commonly credits an X post.  X blocks generic

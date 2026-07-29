@@ -11,6 +11,7 @@ from tapology_scraper.spiders.event_images import (
     extract_ufc_hero_url,
     event_is_in_image_window,
     image_response_is_valid,
+    instagram_embed_url,
     is_supported_source_page,
     poster_is_displayable,
     poster_needs_wikipedia_refresh,
@@ -144,6 +145,36 @@ class EventImageResolverTests(unittest.TestCase):
         self.assertEqual(
             extract_source_image_url(response),
             "https://pbs.twimg.com/media/poster.jpg:large",
+        )
+
+    def test_instagram_source_uses_public_embed_page(self):
+        self.assertEqual(
+            instagram_embed_url("https://www.instagram.com/p/Da4rrB4mssd/"),
+            "https://www.instagram.com/p/Da4rrB4mssd/embed/",
+        )
+        self.assertEqual(
+            instagram_embed_url(
+                "https://www.instagram.com/ufc/reel/ABC123/?utm_source=test"
+            ),
+            "https://www.instagram.com/reel/ABC123/embed/",
+        )
+
+    def test_prefers_uncropped_instagram_embed_image(self):
+        response = html_response(
+            "https://www.instagram.com/p/Da4rrB4mssd/embed/",
+            """
+            <html><head>
+              <meta property="og:image"
+                    content="https://cdninstagram.com/square.jpg">
+            </head><body>
+              <img class="EmbeddedMediaImage"
+                   src="https://fbcdn.net/original-poster.jpg">
+            </body></html>
+            """,
+        )
+        self.assertEqual(
+            extract_source_image_url(response),
+            "https://fbcdn.net/original-poster.jpg",
         )
 
     def test_prefers_official_xl_2x_hero(self):
