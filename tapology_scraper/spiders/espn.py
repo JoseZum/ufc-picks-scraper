@@ -93,6 +93,18 @@ def event_has_all_results(
     return bool(active_bouts) and result_count == len(active_bouts)
 
 
+def event_is_near(
+    event: dict,
+    reference_date: date | None = None,
+    days_ahead: int = 7,
+) -> bool:
+    event_date = document_date(event.get("date") or event.get("event_date"))
+    if not event_date:
+        return False
+    days_until = (event_date - (reference_date or date.today())).days
+    return -1 <= days_until <= days_ahead
+
+
 class EspnSpider(scrapy.Spider):
     name = "espn"
     allowed_domains = [
@@ -505,6 +517,17 @@ class EspnSpider(scrapy.Spider):
 
             self.processed_bouts += 1
             matched_bout_ids.add(int(existing_bout["id"]))
+            competition_completed = bool(
+                ((competition.get("status") or {}).get("type") or {}).get(
+                    "completed"
+                )
+            )
+            if existing_bout.get("status") == "cancelled" and not competition_completed:
+                self.db.bouts.update_one(
+                    {"id": existing_bout["id"]},
+                    {"$set": {"status": "scheduled"}},
+                )
+                existing_bout["status"] = "scheduled"
             corner_mapping = map_competitors_to_corners(competition, existing_bout)
             self._link_competitors(existing_bout, competition, corner_mapping)
 
@@ -551,6 +574,43 @@ class EspnSpider(scrapy.Spider):
             for bout in current_bouts
             if int(bout["id"]) in matched_bout_ids
         ]
+        card_is_authoritative = (
+            self.mode in {"general", "photos"}
+            and bool(competitions)
+            and len(matched_bout_ids) == len(competitions)
+            and event_is_near(internal_event)
+        )
+        if card_is_authoritative:
+            removed_bout_ids = [
+                bout["id"]
+                for bout in current_bouts
+                if int(bout["id"]) not in matched_bout_ids
+                and bout.get("status") == "scheduled"
+                and not has_fight_result(bout)
+            ]
+            if removed_bout_ids:
+                self.db.bouts.update_many(
+                    {"id": {"$in": removed_bout_ids}},
+                    {
+                        "$set": {
+                            "status": "cancelled",
+                            "espn_removed_from_card_at": datetime.utcnow(),
+                        }
+                    },
+                )
+                self.logger.info(
+                    "Cancelled %s local bouts removed from ESPN event %s",
+                    len(removed_bout_ids),
+                    event_id,
+                )
+                current_bouts = list(
+                    self.db.bouts.find({"event_id": event_id})
+                )
+                matched_bouts = [
+                    bout
+                    for bout in current_bouts
+                    if int(bout["id"]) in matched_bout_ids
+                ]
         if event_has_all_results(matched_bouts, len(competitions)):
             # Once every fight ESPN lists has a result, unmatched local bouts
             # are cancelled/removed-from-card fights, not pending results.
@@ -990,7 +1050,7 @@ class EspnSpider(scrapy.Spider):
 
 
 class EspnFighterImagePipeline:
-    """Download ESPN 350x254 PNG headshots, upload to S3, and link snapshots."""
+    """Link ESPN headshots immediately and mirror them to S3 when available."""
 
     def __init__(self):
         mongo_uri = os.environ.get("MONGODB_URI")
@@ -1000,7 +1060,9 @@ class EspnFighterImagePipeline:
         self.db = self.mongo_client.ufc_picks
         self._s3_service = None
         self.crawler = None
-        self.failed_uploads = 0
+        self.s3_mirror_disabled = False
+        self.direct_images_linked = 0
+        self.s3_images_uploaded = 0
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -1010,7 +1072,14 @@ class EspnFighterImagePipeline:
 
     def open_spider(self):
         if self.crawler.spider.mode in {"general", "photos"}:
-            self._get_s3_service()
+            try:
+                self._get_s3_service()
+            except Exception as error:
+                self.s3_mirror_disabled = True
+                self.crawler.spider.logger.warning(
+                    "S3 headshot mirror unavailable; using ESPN CDN directly: %s",
+                    error,
+                )
 
     def _get_s3_service(self):
         if self._s3_service is None:
@@ -1041,6 +1110,18 @@ class EspnFighterImagePipeline:
         spider = self.crawler.spider
         athlete_id = str(item["espn_id"])
         image_url = item["image_url"]
+        direct_url = item.get("source_url") or image_url
+        direct_fields = {
+            "image_source": "espn_direct",
+            "espn_headshot_url": direct_url,
+            "image_updated_at": datetime.utcnow(),
+        }
+        await self._persist_image_fields(athlete_id, direct_fields)
+        self.direct_images_linked += 1
+
+        if self.s3_mirror_disabled:
+            return item
+
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(
@@ -1074,46 +1155,51 @@ class EspnFighterImagePipeline:
             update_fields = {
                 "image_key": s3_key,
                 "image_source": "espn",
-                "espn_headshot_url": item.get("source_url") or image_url,
+                "espn_headshot_url": direct_url,
                 "image_updated_at": datetime.utcnow(),
             }
-            await self.db.fighters.update_one(
-                {"_id": int(athlete_id)},
-                {"$set": update_fields},
-                upsert=True,
-            )
-            source_values = _source_id_values(athlete_id)
-            for collection_name in ("bouts", "bout_details"):
-                collection = self.db[collection_name]
-                for corner in ("red", "blue"):
-                    await collection.update_many(
-                        {f"fighters.{corner}.espn_id": {"$in": source_values}},
-                        {
-                            "$set": {
-                                f"fighters.{corner}.{key}": value
-                                for key, value in update_fields.items()
-                            }
-                        },
-                    )
-
+            await self._persist_image_fields(athlete_id, update_fields)
+            self.s3_images_uploaded += 1
             spider.logger.info(
                 "Uploaded ESPN headshot for %s to %s",
                 athlete_id,
                 s3_key,
             )
         except Exception as error:
-            self.failed_uploads += 1
-            spider.logger.error(
-                "Failed ESPN headshot for %s (%s): %s",
+            self.s3_mirror_disabled = True
+            spider.logger.warning(
+                "S3 headshot mirror disabled after upload error; "
+                "ESPN CDN fallback remains active for %s: %s",
                 athlete_id,
-                image_url,
                 error,
             )
         return item
 
+    async def _persist_image_fields(self, athlete_id: str, update_fields: dict):
+        await self.db.fighters.update_one(
+            {"_id": int(athlete_id)},
+            {"$set": update_fields},
+            upsert=True,
+        )
+        source_values = _source_id_values(athlete_id)
+        for collection_name in ("bouts", "bout_details"):
+            collection = self.db[collection_name]
+            for corner in ("red", "blue"):
+                await collection.update_many(
+                    {f"fighters.{corner}.espn_id": {"$in": source_values}},
+                    {
+                        "$set": {
+                            f"fighters.{corner}.{key}": value
+                            for key, value in update_fields.items()
+                        }
+                    },
+                )
+
     def close_spider(self):
         self.mongo_client.close()
-        if self.failed_uploads:
-            raise RuntimeError(
-                f"{self.failed_uploads} ESPN headshots failed to upload"
-            )
+        self.crawler.spider.logger.info(
+            "ESPN headshots linked=%s mirrored_to_s3=%s direct_fallback=%s",
+            self.direct_images_linked,
+            self.s3_images_uploaded,
+            self.s3_mirror_disabled,
+        )

@@ -48,6 +48,26 @@ def normalize_text(value: str | None) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", value))
 
 
+def normalize_weight_class(value: str | None) -> str | None:
+    """Remove source/UI suffixes and exact duplicated weight-class phrases."""
+    cleaned = " ".join(str(value or "").split()).strip()
+    if not cleaned:
+        return None
+
+    words = [
+        word
+        for word in cleaned.split()
+        if word.lower().strip(" .:-") not in {"bout", "match"}
+    ]
+    if len(words) % 2 == 0:
+        midpoint = len(words) // 2
+        if [word.lower() for word in words[:midpoint]] == [
+            word.lower() for word in words[midpoint:]
+        ]:
+            words = words[:midpoint]
+    return " ".join(words) or None
+
+
 def name_similarity(left: str | None, right: str | None) -> float:
     left_normalized = normalize_text(left)
     right_normalized = normalize_text(right)
@@ -446,9 +466,10 @@ def transform_competition_metadata(payload: dict) -> dict:
         ((payload.get("format") or {}).get("regulation") or {}).get("periods")
         or 3
     )
-    weight_class = (payload.get("type") or {}).get("text") or (
-        payload.get("type") or {}
-    ).get("abbreviation")
+    weight_class = normalize_weight_class(
+        (payload.get("type") or {}).get("text")
+        or (payload.get("type") or {}).get("abbreviation")
+    )
     return {
         "card_section": card_section,
         "card_order": match_number,
@@ -499,7 +520,9 @@ def transform_new_bout(
         "url": None,
         "slug": f"espn-{competition_id}",
         "espn_competition_id": str(competition_id),
-        "weight_class": (competition.get("type") or {}).get("abbreviation"),
+        "weight_class": normalize_weight_class(
+            (competition.get("type") or {}).get("abbreviation")
+        ),
         "gender": (
             "female"
             if str((competition.get("type") or {}).get("abbreviation", "")).startswith("W ")

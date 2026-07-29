@@ -9,6 +9,7 @@ from tapology_scraper.espn_etl import (
     find_event_match,
     infer_card_position,
     map_competitors_to_corners,
+    normalize_weight_class,
     parse_record_summary,
     transform_athlete_profile,
     transform_athlete_records,
@@ -16,7 +17,11 @@ from tapology_scraper.espn_etl import (
     transform_event,
     transform_result,
 )
-from tapology_scraper.spiders.espn import event_has_all_results, has_fight_result
+from tapology_scraper.spiders.espn import (
+    event_has_all_results,
+    event_is_near,
+    has_fight_result,
+)
 
 
 def competitor(
@@ -45,6 +50,34 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_upcoming_card_is_authoritative_only_near_event_date(self):
+        self.assertTrue(
+            event_is_near(
+                {"date": datetime(2026, 8, 1)},
+                reference_date=date(2026, 7, 29),
+            )
+        )
+        self.assertFalse(
+            event_is_near(
+                {"date": datetime(2026, 8, 29)},
+                reference_date=date(2026, 7, 29),
+            )
+        )
+
+    def test_normalizes_duplicated_bout_weight_class(self):
+        self.assertEqual(
+            normalize_weight_class("Bantamweight Bout Bantamweight Bout"),
+            "Bantamweight",
+        )
+        self.assertEqual(
+            normalize_weight_class("Light Heavyweight Bout"),
+            "Light Heavyweight",
+        )
+        self.assertEqual(
+            normalize_weight_class("Women's Bantamweight"),
+            "Women's Bantamweight",
+        )
+
     def test_event_completes_when_expected_results_are_present(self):
         bouts = [
             {"id": 1, "status": "completed", "result": {"winner": "red"}},
