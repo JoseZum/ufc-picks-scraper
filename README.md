@@ -31,19 +31,11 @@ The pipeline synchronizes the external sports data that powers UFC Picks:
 
 ## Data flow
 
-```mermaid
-flowchart LR
-    ESPN["ESPN MMA"] -->|"Events · Cards · Results · Fighter data"| ETL["Scrapy ETL"]
-    UFC["UFC"] -->|"Official event media"| ETL
-    WIKI["Wikipedia"] -->|"Poster sources / fallback"| ETL
+<div align="center">
 
-    ETL -->|"Headshots · Posters · Hero images"| S3["AWS S3"]
-    ETL -->|"Normalized events · Bouts · Results · Score updates"| DB[("MongoDB Atlas")]
+<img src="./public/data-diagram.png" alt="UFC Picks data pipeline architecture" width="100%">
 
-    DB -->|"Platform data"| API["UFC Picks API"]
-    S3 -->|"Media delivery"| WEB["UFC Picks Web App"]
-    API -->|"REST API · Auth · Picks · Leaderboards"| WEB
-```
+</div>
 
 ## Pipeline modes
 
