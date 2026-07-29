@@ -1,100 +1,136 @@
-# UFC Picks ETL
+<div align="center">
 
-The primary card, result, fighter-stat, and fighter-photo source is ESPN's UFC
-JSON feed. Event posters are resolved separately from Wikipedia/original
-sources and official UFC event pages.
+<img src="./public/ufcscraper-logo.png" alt="UFC Picks Data Pipeline" width="600">
 
-## Setup
+# UFC Picks — Data Pipeline
+
+### Automated UFC event ingestion, enrichment, and result synchronization.
+
+Scrapy-based ETL service that keeps UFC Picks updated with events, fight cards,
+results, fighter profiles, and media.
+
+<br>
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Scrapy](https://img.shields.io/badge/Scrapy-2.14-60A839?style=for-the-badge&logo=scrapy&logoColor=white)](https://scrapy.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![AWS S3](https://img.shields.io/badge/AWS-S3-FF9900?style=for-the-badge&logo=amazons3&logoColor=white)](https://aws.amazon.com/s3/)
+
+<sub>ESPN ingestion · Result synchronization · Fighter media · Scheduled automation</sub>
+
+</div>
+
+## What it does
+
+The pipeline synchronizes the external sports data that powers UFC Picks:
+
+- Upcoming and historical UFC events and complete fight cards.
+- Fighter records, physical statistics, and ESPN source mappings.
+- Officially available fight results and recalculated prediction scores.
+- Fighter headshots, event posters, and wide hero images.
+
+## Data flow
+
+```mermaid
+flowchart LR
+    ESPN["ESPN UFC feeds"] --> ETL["Scrapy ETL"]
+    UFC["Official UFC media"] --> ETL
+    WIKI["Wikipedia image sources"] --> ETL
+
+    ETL --> DB[("MongoDB")]
+    ETL --> S3["AWS S3"]
+
+    DB --> API["UFC Picks API"]
+    S3 --> WEB["UFC Picks Web App"]
+    API --> WEB
+```
+
+## Pipeline modes
+
+| Mode | Purpose |
+| --- | --- |
+| `general` | Sync cards, fighters, records, available results, scores, and missing headshots. |
+| `results` | Find unresolved bouts, import results, and recalculate scores. |
+| `photos` | Mirror upcoming-card ESPN headshots into S3. |
+| `event_images` | Resolve posters and wide event hero images. |
+
+<details>
+<summary>Commands</summary>
 
 ```bash
-pip install -r requirements.txt
-```
-
-Required for every ESPN mode:
-
-```dotenv
-MONGODB_URI=mongodb://...
-```
-
-Required when the selected mode uploads fighter photos:
-
-```dotenv
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_S3_BUCKET=...
-AWS_REGION=us-east-1
-IMAGE_SOURCE_MODE=s3
-```
-
-## ESPN modes
-
-### General
-
-Refreshes cards, source mappings, fighter profiles, records, physical stats,
-available results, scoring, and missing S3 headshots.
-
-```bash
+# General sync for recent and upcoming cards
 scrapy crawl espn -a MODE=general -a DAYS_BACK=14 -a DAYS_AHEAD=60
-```
 
-Full-season backfill:
-
-```bash
+# A season, a specific event, or only unresolved results
 scrapy crawl espn -a MODE=general -a SEASON=2026
-```
-
-One event, using either the existing UFC Picks ID or ESPN event ID:
-
-```bash
 scrapy crawl espn -a MODE=general -a EVENT_ID=600059339
-```
-
-### Results
-
-Finds every local UFC card with a bout still missing its result (through
-tomorrow), requests those exact ESPN dates, and recalculates pick/user scores.
-Existing results are not overwritten.
-
-```bash
 scrapy crawl espn -a MODE=results
-```
 
-### Photos
-
-Links fighters on upcoming cards, downloads ESPN's 350x254 PNG headshots,
-uploads them to S3, and stores the resulting `image_key`.
-
-```bash
+# Media
 scrapy crawl espn -a MODE=photos -a DAYS_AHEAD=60
+scrapy crawl event_images
 ```
 
 Use `-a FORCE_PHOTOS=true` to replace already-mirrored ESPN headshots.
 
-## Event images
+</details>
 
-```bash
-scrapy crawl event_images
-```
+## Data sources
 
-- Card poster: Wikipedia's credited original source, with the Wikipedia file
-  as fallback.
-- Wide hero: official UFC `background_image_xl_2x`.
+ESPN's UFC JSON feeds are the primary source for cards, results, fighter
+statistics, and headshots. The pipeline resolves posters through Wikipedia's
+credited original sources (with a Wikipedia-file fallback) and wide hero images
+from official UFC event pages.
 
-## Source-ID policy
+## Source-ID strategy
 
 Existing UFC Picks event and bout IDs remain canonical. The ETL matches ESPN
-cards by source ID or by date/name/fighter matchup, then stores
-`espn_event_id`, `espn_competition_id`, and fighter `espn_id`. This prevents
-existing picks and frontend URLs from being invalidated.
+cards by source ID or by date, name, and fighter matchup, then stores ESPN
+source IDs alongside the local records. This protects existing picks and web
+URLs from ID changes. New ESPN-only cards use ESPN's numeric event and
+competition IDs as their canonical IDs.
 
-New ESPN-only cards use ESPN's numeric event and competition IDs as their
-canonical IDs.
+## Getting started
+
+```bash
+git clone https://github.com/JoseZum/ufc-picks-scraper.git
+cd ufc-picks-scraper
+python -m venv .venv
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Set `MONGODB_URI` for every ESPN mode. Media uploads also require
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_REGION`,
+and `IMAGE_SOURCE_MODE=s3`.
 
 ## Automation
 
-- ESPN results: every 2 hours.
-- ESPN general ETL: Monday and Thursday.
-- Event posters/heroes: daily.
-- ESPN upcoming-card photos: daily.
+GitHub Actions runs:
 
-All jobs can also be triggered manually from the GitHub Actions workflow.
+- ESPN result synchronization every two hours.
+- General ESPN ingestion on Monday and Thursday.
+- Event posters and hero images daily.
+- Upcoming-card headshots daily.
+
+Every job can also be triggered manually from the workflow dispatch menu.
+
+## Testing
+
+```bash
+pytest
+```
+
+## UFC Picks ecosystem
+
+- [Platform overview](https://github.com/JoseZum/ufc-picks)
+- [Web App](https://github.com/JoseZum/ufc-picks-frontend)
+- [API](https://github.com/JoseZum/ufc-picks-backend)
+- [Data Pipeline](https://github.com/JoseZum/ufc-picks-scraper)
+
+<div align="center">
+
+`ingest → predict → score → rank`
+
+</div>

@@ -35,3 +35,4 @@ test_scrapers_local.py
 /test_scrapers_local.py
 
 __pycache__/
+.ruff_cache/
