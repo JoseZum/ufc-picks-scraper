@@ -10,9 +10,11 @@ from tapology_scraper.spiders.event_images import (
     extract_ufc_event_date,
     extract_ufc_hero_url,
     event_is_in_image_window,
+    event_is_in_season,
     image_response_is_valid,
     instagram_embed_url,
     is_supported_source_page,
+    is_x_media_url,
     poster_is_displayable,
     poster_needs_wikipedia_refresh,
     select_wikipedia_article,
@@ -147,6 +149,19 @@ class EventImageResolverTests(unittest.TestCase):
             "https://pbs.twimg.com/media/poster.jpg:large",
         )
 
+    def test_x_source_rejects_generic_preview_art(self):
+        self.assertTrue(
+            is_x_media_url("https://pbs.twimg.com/media/poster.jpg:large")
+        )
+        self.assertFalse(
+            is_x_media_url(
+                "https://upload.wikimedia.org/wikipedia/commons/icon.png"
+            )
+        )
+        self.assertFalse(
+            is_x_media_url("https://abs.twimg.com/responsive-web/client-web/icon.png")
+        )
+
     def test_instagram_source_uses_public_embed_page(self):
         self.assertEqual(
             instagram_embed_url("https://www.instagram.com/p/Da4rrB4mssd/"),
@@ -253,6 +268,17 @@ class EventImageResolverTests(unittest.TestCase):
         self.assertFalse(
             event_is_in_image_window(
                 {"date": datetime(2025, 8, 22)},
+                today=date(2026, 7, 28),
+            )
+        )
+
+    def test_image_season_can_be_checked_without_expanding_daily_window(self):
+        event = {"date": datetime(2026, 1, 24)}
+        self.assertTrue(event_is_in_season(event, 2026))
+        self.assertFalse(event_is_in_season(event, 2025))
+        self.assertFalse(
+            event_is_in_image_window(
+                event,
                 today=date(2026, 7, 28),
             )
         )

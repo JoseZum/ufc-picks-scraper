@@ -67,6 +67,15 @@ Use `-a FORCE_PHOTOS=true` to replace already-mirrored ESPN headshots.
 
 </details>
 
+### One-time 2026 historical completion
+
+The manual GitHub Actions option `backfill_2026` runs the isolated
+`backfill_2026.py` migration. It imports only completed 2026 UFC cards,
+connects the legacy UFC White House event to ESPN Freedom 250, fills historical
+results and posters, validates every result and poster URL, and records a Mongo
+completion marker so it will not run twice. Scheduled scraper windows are not
+changed.
+
 ## Data sources
 
 ESPN's UFC JSON feeds are the primary source for cards, results, fighter

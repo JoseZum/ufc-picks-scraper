@@ -313,6 +313,17 @@ def is_x_source_page(url: str | None) -> bool:
     return (urlparse(url).hostname or "").lower() in _X_SOURCE_PAGE_HOSTS
 
 
+def is_x_media_url(url: str | None) -> bool:
+    """Accept only actual X photo assets, never generic social preview art."""
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return (
+        (parsed.hostname or "").lower() == "pbs.twimg.com"
+        and parsed.path.startswith("/media/")
+    )
+
+
 def is_instagram_source_page(url: str | None) -> bool:
     if not url:
         return False
@@ -475,6 +486,12 @@ def event_is_in_image_window(
     )
 
 
+def event_is_in_season(event: dict, season: int) -> bool:
+    """Match a historical season independently from the daily image window."""
+    date_string = _event_date_string(event)
+    return bool(date_string and date_string.startswith(f"{season:04d}-"))
+
+
 def _page_event_name(response) -> str:
     heading = " ".join(response.css("h1 ::text, h1::text").getall())
     matchup = " ".join(
@@ -508,7 +525,15 @@ class EventImagesSpider(scrapy.Spider):
         },
     }
 
-    def __init__(self, EVENT_ID=None, FORCE=None, *args, **kwargs):
+    def __init__(
+        self,
+        EVENT_ID=None,
+        SEASON=None,
+        FORCE=None,
+        ONLY_COMPLETED=None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         mongo_uri = os.environ.get("MONGODB_URI")
         if not mongo_uri:
@@ -517,7 +542,15 @@ class EventImagesSpider(scrapy.Spider):
         self.mongo_client = MongoClient(mongo_uri)
         self.db = self.mongo_client.ufc_picks
         self.target_event_id = int(EVENT_ID) if EVENT_ID else None
+        self.season = int(SEASON) if SEASON else None
+        if self.target_event_id is not None and self.season is not None:
+            raise ValueError("EVENT_ID and SEASON cannot be used together")
         self.force = str(FORCE or "").lower() in {"1", "true", "yes"}
+        self.only_completed = str(ONLY_COMPLETED or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         self.events: dict[int, dict] = {}
         self.events_by_date: dict[str, list[dict]] = {}
         self.requested_official_urls: set[str] = set()
@@ -542,8 +575,14 @@ class EventImagesSpider(scrapy.Spider):
             "hero_image_source": 1,
         }
         for event in self.db.events.find(query, projection):
-            if self.target_event_id is None and not event_is_in_image_window(event):
+            if self.only_completed and event.get("status") != "completed":
                 continue
+            if self.target_event_id is None:
+                if self.season is not None:
+                    if not event_is_in_season(event, self.season):
+                        continue
+                elif not event_is_in_image_window(event):
+                    continue
 
             event_id = int(event.get("id") or event["_id"])
             event["id"] = event_id
@@ -750,6 +789,11 @@ class EventImagesSpider(scrapy.Spider):
         metadata: dict,
     ):
         source_image_url = extract_source_image_url(response)
+        if (
+            is_x_source_page(metadata.get("poster_source_page_url"))
+            and not is_x_media_url(source_image_url)
+        ):
+            source_image_url = None
         self._save_poster(
             event_id,
             source_image_url or fallback_url,

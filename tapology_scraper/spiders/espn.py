@@ -12,6 +12,7 @@ Examples:
     scrapy crawl espn -a MODE=photos -a DAYS_AHEAD=60
     scrapy crawl espn -a MODE=general -a EVENT_ID=600059339
     scrapy crawl espn -a MODE=general -a SEASON=2026
+    scrapy crawl espn -a MODE=general -a SEASON=2026 -a ONLY_COMPLETED=true
 """
 
 from __future__ import annotations
@@ -105,6 +106,22 @@ def event_is_near(
     return -1 <= days_until <= days_ahead
 
 
+def select_ufc_events(payload: dict, only_completed: bool = False) -> list[dict]:
+    """Select UFC cards while optionally excluding every unfinished event."""
+    events = [
+        event
+        for event in payload.get("events") or []
+        if "ufc" in str(event.get("name") or "").lower()
+    ]
+    if only_completed:
+        events = [
+            event
+            for event in events
+            if event_status(event) == "completed"
+        ]
+    return events
+
+
 class EspnSpider(scrapy.Spider):
     name = "espn"
     allowed_domains = [
@@ -137,6 +154,7 @@ class EspnSpider(scrapy.Spider):
         DAYS_AHEAD=None,
         LIMIT=None,
         FORCE_PHOTOS=None,
+        ONLY_COMPLETED=None,
         *args,
         **kwargs,
     ):
@@ -157,6 +175,11 @@ class EspnSpider(scrapy.Spider):
         self.days_ahead = int(DAYS_AHEAD) if DAYS_AHEAD else (60 if self.mode != "results" else 1)
         self.limit = int(LIMIT) if LIMIT else None
         self.force_photos = str(FORCE_PHOTOS or "").lower() in {"1", "true", "yes"}
+        self.only_completed = str(ONLY_COMPLETED or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         self.requested_athletes: set[str] = set()
         self.processed_events = 0
         self.processed_bouts = 0
@@ -317,11 +340,7 @@ class EspnSpider(scrapy.Spider):
 
     def parse_scoreboard(self, response):
         payload = response.json()
-        events = [
-            event
-            for event in payload.get("events") or []
-            if "ufc" in str(event.get("name") or "").lower()
-        ]
+        events = select_ufc_events(payload, self.only_completed)
         if self.target_event_id:
             events = [
                 event

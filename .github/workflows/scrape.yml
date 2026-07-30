@@ -26,6 +26,7 @@ on:
           - espn_results
           - espn_general
           - espn_photos
+          - backfill_2026
         default: scheduled
 
 jobs:
@@ -125,3 +126,18 @@ jobs:
         run: |
           echo "ESPN fighter photo refresh completed"
           echo "Check logs above for uploaded and skipped headshots"
+
+  backfill-2026:
+    name: One-time 2026 Completed Cards Backfill
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'backfill_2026'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Link, import, image-fill, and verify completed 2026 cards
+        run: python backfill_2026.py
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}

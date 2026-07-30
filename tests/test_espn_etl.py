@@ -21,6 +21,7 @@ from tapology_scraper.spiders.espn import (
     event_has_all_results,
     event_is_near,
     has_fight_result,
+    select_ufc_events,
 )
 
 
@@ -50,6 +51,32 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_historical_scope_includes_only_completed_ufc_events(self):
+        payload = {
+            "events": [
+                {
+                    "id": "1",
+                    "name": "UFC Freedom 250",
+                    "status": {"type": {"completed": True}},
+                },
+                {
+                    "id": "2",
+                    "name": "UFC 330",
+                    "status": {"type": {"completed": False}},
+                },
+                {
+                    "id": "3",
+                    "name": "Dana White's Contender Series",
+                    "status": {"type": {"completed": True}},
+                },
+            ]
+        }
+
+        self.assertEqual(
+            [event["id"] for event in select_ufc_events(payload, True)],
+            ["1"],
+        )
+
     def test_upcoming_card_is_authoritative_only_near_event_date(self):
         self.assertTrue(
             event_is_near(
