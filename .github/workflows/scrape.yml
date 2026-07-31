@@ -27,6 +27,7 @@ on:
           - espn_general
           - espn_photos
           - backfill_2026
+          - backfill_timing_2026
         default: scheduled
 
 jobs:
@@ -139,5 +140,20 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Link, import, image-fill, and verify completed 2026 cards
         run: python backfill_2026.py
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+  backfill-timing-2026:
+    name: One-time 2026 Scheduled Section Timing Backfill
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'backfill_timing_2026'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Import and verify staged section locks
+        run: python backfill_2026_timing.py
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}

@@ -34,8 +34,10 @@ from tapology_scraper.espn_etl import (
     event_status,
     find_bout_match,
     find_event_match,
+    infer_competition_sections,
     infer_card_position,
     map_competitors_to_corners,
+    mongo_utc_datetime,
     safe_external_http_url,
     transform_athlete_profile,
     transform_athlete_records,
@@ -106,7 +108,11 @@ def event_is_near(
     return -1 <= days_until <= days_ahead
 
 
-def select_ufc_events(payload: dict, only_completed: bool = False) -> list[dict]:
+def select_ufc_events(
+    payload: dict,
+    only_completed: bool = False,
+    only_scheduled: bool = False,
+) -> list[dict]:
     """Select UFC cards while optionally excluding every unfinished event."""
     events = [
         event
@@ -118,6 +124,12 @@ def select_ufc_events(payload: dict, only_completed: bool = False) -> list[dict]
             event
             for event in events
             if event_status(event) == "completed"
+        ]
+    if only_scheduled:
+        events = [
+            event
+            for event in events
+            if event_status(event) == "scheduled"
         ]
     return events
 
@@ -155,6 +167,7 @@ class EspnSpider(scrapy.Spider):
         LIMIT=None,
         FORCE_PHOTOS=None,
         ONLY_COMPLETED=None,
+        ONLY_SCHEDULED=None,
         *args,
         **kwargs,
     ):
@@ -180,6 +193,15 @@ class EspnSpider(scrapy.Spider):
             "true",
             "yes",
         }
+        self.only_scheduled = str(ONLY_SCHEDULED or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if self.only_completed and self.only_scheduled:
+            raise ValueError(
+                "ONLY_COMPLETED and ONLY_SCHEDULED cannot both be true"
+            )
         self.requested_athletes: set[str] = set()
         self.processed_events = 0
         self.processed_bouts = 0
@@ -340,7 +362,11 @@ class EspnSpider(scrapy.Spider):
 
     def parse_scoreboard(self, response):
         payload = response.json()
-        events = select_ufc_events(payload, self.only_completed)
+        events = select_ufc_events(
+            payload,
+            self.only_completed,
+            self.only_scheduled,
+        )
         if self.target_event_id:
             events = [
                 event
@@ -477,6 +503,18 @@ class EspnSpider(scrapy.Spider):
                 "event_art",
                 "event_art_content_type",
             }
+            if existing_event.get("timing_source") == "admin":
+                protected_fields.update(
+                    {
+                        "date",
+                        "start_time_et",
+                        "card_start_time_utc",
+                        "picks_lock_time_utc",
+                        "section_start_times_utc",
+                        "section_lock_times_utc",
+                        "timing_source",
+                    }
+                )
             updates = {
                 key: value
                 for key, value in transformed.items()
@@ -502,6 +540,7 @@ class EspnSpider(scrapy.Spider):
     def _process_card(self, espn_event: dict, internal_event: dict):
         event_id = int(internal_event["id"])
         competitions = espn_event.get("competitions") or []
+        competition_sections = infer_competition_sections(competitions)
         existing_bouts = list(self.db.bouts.find({"event_id": event_id}))
         main_event_bout_id = None
         matched_bout_ids: set[int] = set()
@@ -522,6 +561,7 @@ class EspnSpider(scrapy.Spider):
                     event_id,
                     index,
                     len(competitions),
+                    competition_sections.get(str(competition.get("id") or "")),
                 )
                 self.db.bouts.update_one(
                     {"id": bout["id"]},
@@ -549,6 +589,25 @@ class EspnSpider(scrapy.Spider):
                 existing_bout["status"] = "scheduled"
             corner_mapping = map_competitors_to_corners(competition, existing_bout)
             self._link_competitors(existing_bout, competition, corner_mapping)
+            summary_metadata = {
+                "card_section": competition_sections.get(
+                    str(competition.get("id") or "")
+                ),
+            }
+            if internal_event.get("timing_source") != "admin":
+                summary_metadata["automatic_lock_time_utc"] = (
+                    mongo_utc_datetime(competition.get("date"))
+                )
+            self.db.bouts.update_one(
+                {"id": existing_bout["id"]},
+                {
+                    "$set": {
+                        key: value
+                        for key, value in summary_metadata.items()
+                        if value is not None
+                    }
+                },
+            )
 
             if existing_bout.get("is_main_event") or index == len(competitions) - 1:
                 main_event_bout_id = int(existing_bout["id"])
@@ -575,6 +634,7 @@ class EspnSpider(scrapy.Spider):
                 event_id,
                 index,
                 len(competitions),
+                competition_sections.get(str(competition.get("id") or "")),
             )
 
         event_update = {
@@ -799,11 +859,14 @@ class EspnSpider(scrapy.Spider):
         event_id: int,
         index: int,
         total: int,
+        card_section: str | None = None,
     ):
         if self.db.event_card_slots.find_one({"bout_id": bout["id"]}):
             return
 
         position = infer_card_position(index, total)
+        if card_section:
+            position["card_section"] = card_section
         self.db.event_card_slots.update_one(
             {"id": f"{event_id}:{bout['id']}"},
             {
@@ -854,6 +917,16 @@ class EspnSpider(scrapy.Spider):
         metadata = _non_empty_fields(
             transform_competition_metadata(response.json())
         )
+        bout = self.db.bouts.find_one(
+            {"id": bout_id},
+            {"event_id": 1},
+        ) or {}
+        event = self.db.events.find_one(
+            {"id": bout.get("event_id")},
+            {"timing_source": 1},
+        ) or {}
+        if event.get("timing_source") == "admin":
+            metadata.pop("automatic_lock_time_utc", None)
         metadata["espn_last_updated"] = datetime.utcnow()
         self.db.bouts.update_one({"id": bout_id}, {"$set": metadata})
 

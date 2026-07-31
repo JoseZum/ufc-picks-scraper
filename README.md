@@ -76,6 +76,15 @@ results and posters, validates every result and poster URL, and records a Mongo
 completion marker so it will not run twice. Scheduled scraper windows are not
 changed.
 
+### One-time 2026 scheduled timing backfill
+
+The manual GitHub Actions option `backfill_timing_2026` runs
+`backfill_2026_timing.py`. It imports scheduled 2026 cards, maps every fight to
+Main Card, Prelims, or Early Prelims, stores each section's UTC start/lock
+time, and verifies the linked bouts before writing its own one-time Mongo
+completion marker. Events with `timing_source=admin` keep their manually edited
+schedule.
+
 ## Data sources
 
 ESPN's UFC JSON feeds are the primary source for cards, results, fighter

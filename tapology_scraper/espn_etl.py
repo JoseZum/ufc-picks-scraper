@@ -386,10 +386,99 @@ def event_status(espn_event: dict) -> str:
     return "scheduled"
 
 
+def normalize_card_section(value: str | None) -> str | None:
+    """Map ESPN card-segment names to UFC Picks' three public sections."""
+    normalized = normalize_text(value)
+    if not normalized:
+        return None
+    if normalized in {"main", "main card"}:
+        return "main"
+    if normalized in {"prelims2", "early prelims", "early prelim"}:
+        return "early_prelim"
+    if normalized in {"prelims", "prelims1", "prelim", "preliminary card"}:
+        return "prelim"
+    return None
+
+
+def infer_competition_sections(competitions: list[dict]) -> dict[str, str]:
+    """Resolve sections from ESPN metadata, falling back to start-time groups.
+
+    The scoreboard payload consistently gives every fight the start timestamp
+    of its broadcast block even when ``cardSegment`` is omitted. Two timestamp
+    groups mean prelims/main; three mean early prelims/prelims/main.
+    """
+    sections: dict[str, str] = {}
+    dated: dict[datetime, list[str]] = {}
+
+    for competition in competitions:
+        competition_id = str(competition.get("id") or "")
+        if not competition_id:
+            continue
+        card_segment = competition.get("cardSegment") or {}
+        explicit = normalize_card_section(
+            card_segment.get("name") or card_segment.get("description")
+        )
+        if explicit:
+            sections[competition_id] = explicit
+
+        start = parse_espn_datetime(competition.get("date"))
+        if start:
+            dated.setdefault(start, []).append(competition_id)
+
+    ordered_starts = sorted(dated)
+    if len(ordered_starts) >= 3:
+        fallback_sections = {
+            ordered_starts[0]: "early_prelim",
+            ordered_starts[-1]: "main",
+        }
+        for start in ordered_starts[1:-1]:
+            fallback_sections[start] = "prelim"
+    elif len(ordered_starts) == 2:
+        fallback_sections = {
+            ordered_starts[0]: "prelim",
+            ordered_starts[1]: "main",
+        }
+    elif len(ordered_starts) == 1:
+        fallback_sections = {ordered_starts[0]: "main"}
+    else:
+        fallback_sections = {}
+
+    for start, competition_ids in dated.items():
+        for competition_id in competition_ids:
+            sections.setdefault(competition_id, fallback_sections[start])
+    return sections
+
+
+def build_section_times_utc(
+    competitions: list[dict],
+    sections: dict[str, str] | None = None,
+) -> dict[str, datetime]:
+    """Return each section's earliest start as a naive UTC Mongo datetime."""
+    resolved_sections = sections or infer_competition_sections(competitions)
+    starts: dict[str, datetime] = {}
+    for competition in competitions:
+        section = resolved_sections.get(str(competition.get("id") or ""))
+        parsed = parse_espn_datetime(competition.get("date"))
+        if not section or not parsed:
+            continue
+        mongo_start = parsed.replace(tzinfo=None)
+        current = starts.get(section)
+        if current is None or mongo_start < current:
+            starts[section] = mongo_start
+    return starts
+
+
 def transform_event(espn_event: dict, internal_id: int) -> dict:
-    event_datetime = parse_espn_datetime(espn_event.get("date"))
-    et_datetime = event_datetime.astimezone(ZoneInfo("America/New_York")) if event_datetime else None
     competitions = espn_event.get("competitions") or []
+    sections = infer_competition_sections(competitions)
+    section_times = build_section_times_utc(competitions, sections)
+    earliest_section_time = min(section_times.values(), default=None)
+    event_datetime = (
+        earliest_section_time.replace(tzinfo=timezone.utc)
+        if earliest_section_time
+        else parse_espn_datetime(espn_event.get("date"))
+    )
+    et_datetime = event_datetime.astimezone(ZoneInfo("America/New_York")) if event_datetime else None
     venue = next(
         (competition.get("venue") for competition in competitions if competition.get("venue")),
         None,
@@ -409,12 +498,17 @@ def transform_event(espn_event: dict, internal_id: int) -> dict:
         "espn_event_id": espn_id,
         "espn_url": ESPN_FIGHTCENTER_URL.format(event_id=espn_id),
         "date": (
-            datetime.combine(event_datetime.date(), datetime.min.time())
-            if event_datetime
+            datetime.combine(et_datetime.date(), datetime.min.time())
+            if et_datetime
             else None
         ),
         "start_time_et": et_datetime.strftime("%H:%M") if et_datetime else None,
         "timezone": "ET",
+        "card_start_time_utc": earliest_section_time,
+        "picks_lock_time_utc": earliest_section_time,
+        "section_start_times_utc": section_times,
+        "section_lock_times_utc": dict(section_times),
+        "timing_source": "espn",
         "location": {
             "venue": venue.get("fullName"),
             "city": address.get("city"),
@@ -454,12 +548,9 @@ def infer_card_position(index: int, total: int) -> dict:
 def transform_competition_metadata(payload: dict) -> dict:
     card_segment = payload.get("cardSegment") or {}
     segment_name = str(card_segment.get("name") or "").lower()
-    if segment_name == "main":
-        card_section = "main"
-    elif segment_name == "prelims2":
-        card_section = "early_prelim"
-    else:
-        card_section = "prelim"
+    card_section = normalize_card_section(
+        segment_name or card_segment.get("description")
+    ) or "prelim"
 
     match_number = int(payload.get("matchNumber") or 0)
     rounds = int(
@@ -484,6 +575,7 @@ def transform_competition_metadata(payload: dict) -> dict:
         ),
         "espn_match_number": match_number,
         "espn_card_segment": segment_name or None,
+        "automatic_lock_time_utc": mongo_utc_datetime(payload.get("date")),
     }
 
 
@@ -492,9 +584,12 @@ def transform_new_bout(
     event_id: int,
     index: int,
     total: int,
+    card_section: str | None = None,
 ) -> dict:
     competition_id = int(competition["id"])
     position = infer_card_position(index, total)
+    if card_section:
+        position["card_section"] = card_section
     corner_mapping = map_competitors_to_corners(competition)
     fighters = {}
     for corner, competitor in corner_mapping.items():

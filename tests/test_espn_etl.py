@@ -5,8 +5,10 @@ from tapology_scraper.espn_etl import (
     age_on_date,
     build_headshot_url,
     calculate_pick_points,
+    build_section_times_utc,
     find_bout_match,
     find_event_match,
+    infer_competition_sections,
     infer_card_position,
     map_competitors_to_corners,
     normalize_weight_class,
@@ -51,6 +53,59 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_infers_three_card_sections_from_espn_start_groups(self):
+        competitions = [
+            {"id": "early-1", "date": "2026-08-15T21:00Z"},
+            {"id": "prelim-1", "date": "2026-08-15T23:00Z"},
+            {"id": "main-1", "date": "2026-08-16T01:00Z"},
+        ]
+
+        sections = infer_competition_sections(competitions)
+        self.assertEqual(
+            sections,
+            {
+                "early-1": "early_prelim",
+                "prelim-1": "prelim",
+                "main-1": "main",
+            },
+        )
+        self.assertEqual(
+            build_section_times_utc(competitions, sections),
+            {
+                "early_prelim": datetime(2026, 8, 15, 21, 0),
+                "prelim": datetime(2026, 8, 15, 23, 0),
+                "main": datetime(2026, 8, 16, 1, 0),
+            },
+        )
+
+    def test_infers_two_card_sections_as_prelims_and_main(self):
+        competitions = [
+            {"id": "prelim", "date": "2026-08-01T14:00Z"},
+            {"id": "main", "date": "2026-08-01T17:00Z"},
+        ]
+        self.assertEqual(
+            infer_competition_sections(competitions),
+            {"prelim": "prelim", "main": "main"},
+        )
+
+    def test_explicit_espn_segment_wins_over_time_fallback(self):
+        competitions = [
+            {
+                "id": "1",
+                "date": "2026-08-15T21:00Z",
+                "cardSegment": {"name": "prelims2"},
+            },
+            {
+                "id": "2",
+                "date": "2026-08-15T21:00Z",
+                "cardSegment": {"name": "main"},
+            },
+        ]
+        self.assertEqual(
+            infer_competition_sections(competitions),
+            {"1": "early_prelim", "2": "main"},
+        )
+
     def test_historical_scope_includes_only_completed_ufc_events(self):
         payload = {
             "events": [
@@ -137,6 +192,26 @@ class EspnEtlTests(unittest.TestCase):
             135755,
         )
         self.assertEqual(event["date"], datetime(2026, 8, 1))
+
+    def test_event_uses_earliest_section_for_start_and_locks(self):
+        event = transform_event(
+            {
+                "id": "600059185",
+                "name": "UFC 330: Makhachev vs. Machado Garry",
+                "date": "2026-08-15T21:00Z",
+                "competitions": [
+                    {"id": "early", "date": "2026-08-15T21:00Z"},
+                    {"id": "prelim", "date": "2026-08-15T23:00Z"},
+                    {"id": "main", "date": "2026-08-16T01:00Z"},
+                ],
+            },
+            142341,
+        )
+
+        self.assertEqual(event["card_start_time_utc"], datetime(2026, 8, 15, 21))
+        self.assertEqual(event["picks_lock_time_utc"], datetime(2026, 8, 15, 21))
+        self.assertEqual(event["start_time_et"], "17:00")
+        self.assertEqual(event["timing_source"], "espn")
 
     def test_matches_event_by_date_and_accent_insensitive_name(self):
         espn_event = {
