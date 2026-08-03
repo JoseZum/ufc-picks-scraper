@@ -13,6 +13,8 @@ from bson import ObjectId
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
+from tapology_scraper.canonical_card_writer import strip_admin_owned
+
 load_dotenv()
 
 # Configuración
@@ -620,10 +622,12 @@ def process_bout(item: dict, valid_event_ids: set) -> bool:
                 # Preservar data enriquecida si la nueva tiene defaults
                 _merge_fighter_data(new_fighter, existing_fighter)
 
-        bouts_col.update_one(
-            {"_id": bout_id},
-            {"$set": {k: v for k, v in bout_doc.items() if k != "_id"}}
+        # D-DATA-010: a Tapology run may not restate a title field Admin has
+        # decided, in either direction. Everything else is written as before.
+        writable = strip_admin_owned(
+            {k: v for k, v in bout_doc.items() if k != "_id"}, existing
         )
+        bouts_col.update_one({"_id": bout_id}, {"$set": writable})
         stats["bouts_updated"] += 1
         return True
 

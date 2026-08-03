@@ -1,0 +1,49 @@
+{
+  "_fixture": {"scenario_id": "card_change_cancellation_reorder", "variant": "before", "sanitized": true, "source_shape": "espn_scoreboard_event"},
+  "events": [
+    {
+      "id": "990100004",
+      "name": "UFC Fight Night: Fixture Slate vs. Fixture Tide",
+      "date": "2026-09-05T21:00:00Z",
+      "status": {"type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+      "competitions": [
+        {
+          "id": "991400001", "date": "2026-09-05T21:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Flyweight", "abbreviation": "Flyweight"},
+          "competitors": [
+            {"id": "992400001", "order": 1, "winner": false, "athlete": {"id": "992400001", "displayName": "Fixture Rowan"}, "records": [{"name": "overall", "type": "total", "summary": "8-1-0"}]},
+            {"id": "992400002", "order": 2, "winner": false, "athlete": {"id": "992400002", "displayName": "Fixture Sage"}, "records": [{"name": "overall", "type": "total", "summary": "9-2-0"}]}
+          ], "details": []
+        },
+        {
+          "id": "991400002", "date": "2026-09-05T21:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Bantamweight", "abbreviation": "Bantamweight"},
+          "competitors": [
+            {"id": "992400003", "order": 1, "winner": false, "athlete": {"id": "992400003", "displayName": "Fixture Thorn"}, "records": [{"name": "overall", "type": "total", "summary": "10-3-0"}]},
+            {"id": "992400004", "order": 2, "winner": false, "athlete": {"id": "992400004", "displayName": "Fixture Umber"}, "records": [{"name": "overall", "type": "total", "summary": "11-4-0"}]}
+          ], "details": []
+        },
+        {
+          "id": "991400003", "date": "2026-09-05T23:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992400005", "order": 1, "winner": false, "athlete": {"id": "992400005", "displayName": "Fixture Vale"}, "records": [{"name": "overall", "type": "total", "summary": "12-1-0"}]},
+            {"id": "992400006", "order": 2, "winner": false, "athlete": {"id": "992400006", "displayName": "Fixture Willow"}, "records": [{"name": "overall", "type": "total", "summary": "13-3-0"}]}
+          ], "details": []
+        },
+        {
+          "id": "991400004", "date": "2026-09-05T23:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 5}}, "type": {"text": "Welterweight", "abbreviation": "Welterweight"},
+          "competitors": [
+            {"id": "992400007", "order": 1, "winner": false, "athlete": {"id": "992400007", "displayName": "Fixture Slate"}, "records": [{"name": "overall", "type": "total", "summary": "20-2-0"}]},
+            {"id": "992400008", "order": 2, "winner": false, "athlete": {"id": "992400008", "displayName": "Fixture Tide"}, "records": [{"name": "overall", "type": "total", "summary": "19-4-0"}]}
+          ], "details": []
+        }
+      ]
+    }
+  ]
+}

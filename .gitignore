@@ -36,3 +36,8 @@ test_scrapers_local.py
 
 __pycache__/
 .ruff_cache/
+
+# Dev / planning only — no van a producción
+mission-planning/
+*.preimage.json.enc
+backfill_key.b64

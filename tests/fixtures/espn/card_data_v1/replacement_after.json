@@ -1,0 +1,31 @@
+{
+  "_fixture": {"scenario_id": "fighter_replacement_reused_competition", "variant": "after", "sanitized": true, "source_shape": "espn_scoreboard_event"},
+  "events": [
+    {
+      "id": "990100005",
+      "name": "UFC Fight Night: Fixture Nova vs. Fixture Yarrow",
+      "date": "2026-09-19T22:00:00Z",
+      "status": {"type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+      "competitions": [
+        {
+          "id": "991500001", "date": "2026-09-19T22:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Featherweight", "abbreviation": "Featherweight"},
+          "competitors": [
+            {"id": "992500001", "order": 1, "winner": false, "athlete": {"id": "992500001", "displayName": "Fixture Wren"}, "records": [{"name": "overall", "type": "total", "summary": "9-1-0"}]},
+            {"id": "992500002", "order": 2, "winner": false, "athlete": {"id": "992500002", "displayName": "Fixture Xenia"}, "records": [{"name": "overall", "type": "total", "summary": "10-2-0"}]}
+          ], "details": []
+        },
+        {
+          "id": "991500002", "date": "2026-09-20T01:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 5}}, "type": {"text": "Welterweight", "abbreviation": "Welterweight"},
+          "competitors": [
+            {"id": "992500003", "order": 1, "winner": false, "athlete": {"id": "992500003", "displayName": "Fixture Yarrow"}, "records": [{"name": "overall", "type": "total", "summary": "18-3-0"}]},
+            {"id": "992500005", "order": 2, "winner": false, "athlete": {"id": "992500005", "displayName": "Fixture Nova"}, "records": [{"name": "overall", "type": "total", "summary": "15-1-0"}]}
+          ], "details": []
+        }
+      ]
+    }
+  ]
+}

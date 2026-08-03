@@ -1,0 +1,66 @@
+{
+  "_fixture": {
+    "scenario_id": "fight_night_two_sections",
+    "sanitized": true,
+    "source_shape": "espn_scoreboard_event"
+  },
+  "events": [
+    {
+      "id": "990100001",
+      "name": "UFC Fight Night: Fixture Alpha vs. Fixture Bravo",
+      "date": "2026-02-07T22:00:00Z",
+      "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+      "competitions": [
+        {
+          "id": "991100001",
+          "date": "2026-02-07T22:00:00Z",
+          "status": {"period": 3, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Women's Flyweight", "abbreviation": "W Flyweight"},
+          "venue": {"fullName": "Fixture Arena", "address": {"city": "Fixture City", "country": "USA"}},
+          "competitors": [
+            {"id": "992100001", "order": 1, "winner": true, "athlete": {"id": "992100001", "displayName": "Fixture Aurora", "flag": {"alt": "USA"}}, "records": [{"name": "overall", "type": "total", "summary": "10-2-0"}]},
+            {"id": "992100002", "order": 2, "winner": false, "athlete": {"id": "992100002", "displayName": "Fixture Bianca", "flag": {"alt": "Brazil"}}, "records": [{"name": "overall", "type": "total", "summary": "9-3-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Decision"}}]
+        },
+        {
+          "id": "991100002",
+          "date": "2026-02-07T22:00:00Z",
+          "status": {"period": 2, "displayClock": "3:14", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Bantamweight", "abbreviation": "Bantamweight"},
+          "competitors": [
+            {"id": "992100003", "order": 1, "winner": false, "athlete": {"id": "992100003", "displayName": "Fixture Cruz", "flag": {"alt": "Mexico"}}, "records": [{"name": "overall", "type": "total", "summary": "8-2-0"}]},
+            {"id": "992100004", "order": 2, "winner": true, "athlete": {"id": "992100004", "displayName": "Fixture Dantas", "flag": {"alt": "Brazil"}}, "records": [{"name": "overall", "type": "total", "summary": "12-4-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Submission"}}]
+        },
+        {
+          "id": "991100003",
+          "date": "2026-02-08T01:00:00Z",
+          "status": {"period": 1, "displayClock": "1:42", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992100005", "order": 1, "winner": true, "athlete": {"id": "992100005", "displayName": "Fixture Esteban", "flag": {"alt": "Costa Rica"}}, "records": [{"name": "overall", "type": "total", "summary": "11-1-0"}]},
+            {"id": "992100006", "order": 2, "winner": false, "athlete": {"id": "992100006", "displayName": "Fixture Farid", "flag": {"alt": "Spain"}}, "records": [{"name": "overall", "type": "total", "summary": "13-5-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Kotko"}}]
+        },
+        {
+          "id": "991100004",
+          "date": "2026-02-08T01:00:00Z",
+          "status": {"period": 5, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 5}},
+          "type": {"text": "Welterweight", "abbreviation": "Welterweight"},
+          "competitors": [
+            {"id": "992100007", "order": 1, "winner": false, "athlete": {"id": "992100007", "displayName": "Fixture Alpha", "flag": {"alt": "USA"}}, "records": [{"name": "overall", "type": "total", "summary": "20-4-0"}]},
+            {"id": "992100008", "order": 2, "winner": true, "athlete": {"id": "992100008", "displayName": "Fixture Bravo", "flag": {"alt": "Canada"}}, "records": [{"name": "overall", "type": "total", "summary": "19-3-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Decision"}}]
+        }
+      ]
+    }
+  ]
+}

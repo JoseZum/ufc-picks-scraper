@@ -9,4 +9,5 @@ lxml==4.9.3
 pillow==10.1.0
 pytz==2024.1
 httpx==0.26.0
+cryptography==46.0.2
 boto3==1.34.34

@@ -1,0 +1,90 @@
+{
+  "_fixture": {
+    "scenario_id": "numbered_three_sections",
+    "sanitized": true,
+    "source_shape": "espn_scoreboard_event"
+  },
+  "events": [
+    {
+      "id": "990100002",
+      "name": "UFC 999: Fixture Prime vs. Fixture Apex",
+      "date": "2026-08-15T21:00:00Z",
+      "status": {"type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+      "competitions": [
+        {
+          "id": "991200001",
+          "date": "2026-08-15T21:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Flyweight", "abbreviation": "Flyweight"},
+          "venue": {"fullName": "Fixture Dome", "address": {"city": "Fixture City", "country": "USA"}},
+          "competitors": [
+            {"id": "992200001", "order": 1, "winner": false, "athlete": {"id": "992200001", "displayName": "Fixture Aster", "flag": {"alt": "USA"}}, "records": [{"name": "overall", "type": "total", "summary": "7-1-0"}]},
+            {"id": "992200002", "order": 2, "winner": false, "athlete": {"id": "992200002", "displayName": "Fixture Birch", "flag": {"alt": "England"}}, "records": [{"name": "overall", "type": "total", "summary": "8-2-0"}]}
+          ],
+          "details": []
+        },
+        {
+          "id": "991200002",
+          "date": "2026-08-15T21:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Featherweight", "abbreviation": "Featherweight"},
+          "competitors": [
+            {"id": "992200003", "order": 1, "winner": false, "athlete": {"id": "992200003", "displayName": "Fixture Cedar", "flag": {"alt": "France"}}, "records": [{"name": "overall", "type": "total", "summary": "9-0-0"}]},
+            {"id": "992200004", "order": 2, "winner": false, "athlete": {"id": "992200004", "displayName": "Fixture Dahlia", "flag": {"alt": "Spain"}}, "records": [{"name": "overall", "type": "total", "summary": "10-3-0"}]}
+          ],
+          "details": []
+        },
+        {
+          "id": "991200003",
+          "date": "2026-08-15T23:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992200005", "order": 1, "winner": false, "athlete": {"id": "992200005", "displayName": "Fixture Elm", "flag": {"alt": "Canada"}}, "records": [{"name": "overall", "type": "total", "summary": "12-2-0"}]},
+            {"id": "992200006", "order": 2, "winner": false, "athlete": {"id": "992200006", "displayName": "Fixture Fir", "flag": {"alt": "USA"}}, "records": [{"name": "overall", "type": "total", "summary": "13-4-0"}]}
+          ],
+          "details": []
+        },
+        {
+          "id": "991200004",
+          "date": "2026-08-15T23:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Middleweight", "abbreviation": "Middleweight"},
+          "competitors": [
+            {"id": "992200007", "order": 1, "winner": false, "athlete": {"id": "992200007", "displayName": "Fixture Grove", "flag": {"alt": "Australia"}}, "records": [{"name": "overall", "type": "total", "summary": "15-3-0"}]},
+            {"id": "992200008", "order": 2, "winner": false, "athlete": {"id": "992200008", "displayName": "Fixture Hazel", "flag": {"alt": "New Zealand"}}, "records": [{"name": "overall", "type": "total", "summary": "14-2-0"}]}
+          ],
+          "details": []
+        },
+        {
+          "id": "991200005",
+          "date": "2026-08-16T01:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Women's Strawweight", "abbreviation": "W Strawweight"},
+          "competitors": [
+            {"id": "992200009", "order": 1, "winner": false, "athlete": {"id": "992200009", "displayName": "Fixture Iris", "flag": {"alt": "Brazil"}}, "records": [{"name": "overall", "type": "total", "summary": "16-4-0"}]},
+            {"id": "992200010", "order": 2, "winner": false, "athlete": {"id": "992200010", "displayName": "Fixture Juniper", "flag": {"alt": "China"}}, "records": [{"name": "overall", "type": "total", "summary": "15-5-0"}]}
+          ],
+          "details": []
+        },
+        {
+          "id": "991200006",
+          "date": "2026-08-16T01:00:00Z",
+          "status": {"period": 0, "displayClock": "0:00", "type": {"name": "STATUS_SCHEDULED", "state": "pre", "completed": false}},
+          "format": {"regulation": {"periods": 5}},
+          "type": {"text": "Welterweight", "abbreviation": "Welterweight"},
+          "competitors": [
+            {"id": "992200011", "order": 1, "winner": false, "athlete": {"id": "992200011", "displayName": "Fixture Prime", "flag": {"alt": "Georgia"}}, "records": [{"name": "overall", "type": "total", "summary": "24-1-0"}]},
+            {"id": "992200012", "order": 2, "winner": false, "athlete": {"id": "992200012", "displayName": "Fixture Apex", "flag": {"alt": "Ireland"}}, "records": [{"name": "overall", "type": "total", "summary": "18-2-0"}]}
+          ],
+          "details": []
+        }
+      ]
+    }
+  ]
+}

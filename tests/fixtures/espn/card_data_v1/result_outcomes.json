@@ -1,0 +1,63 @@
+{
+  "_fixture": {"scenario_id": "result_outcomes", "sanitized": true, "source_shape": "espn_scoreboard_event"},
+  "events": [
+    {
+      "id": "990100006",
+      "name": "UFC Fixture Results Lab",
+      "date": "2026-10-03T23:00:00Z",
+      "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+      "competitions": [
+        {
+          "id": "991600001", "date": "2026-10-03T23:00:00Z",
+          "status": {"period": 3, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Flyweight", "abbreviation": "Flyweight"},
+          "competitors": [
+            {"id": "992600001", "order": 1, "winner": true, "athlete": {"id": "992600001", "displayName": "Fixture Decision Red"}, "records": [{"name": "overall", "type": "total", "summary": "10-1-0"}]},
+            {"id": "992600002", "order": 2, "winner": false, "athlete": {"id": "992600002", "displayName": "Fixture Decision Blue"}, "records": [{"name": "overall", "type": "total", "summary": "9-2-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Decision"}}]
+        },
+        {
+          "id": "991600002", "date": "2026-10-03T23:00:00Z",
+          "status": {"period": 1, "displayClock": "1:17", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Bantamweight", "abbreviation": "Bantamweight"},
+          "competitors": [
+            {"id": "992600003", "order": 1, "winner": false, "athlete": {"id": "992600003", "displayName": "Fixture Knockout Red"}, "records": [{"name": "overall", "type": "total", "summary": "11-2-0"}]},
+            {"id": "992600004", "order": 2, "winner": true, "athlete": {"id": "992600004", "displayName": "Fixture Knockout Blue"}, "records": [{"name": "overall", "type": "total", "summary": "12-3-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Kotko"}}]
+        },
+        {
+          "id": "991600003", "date": "2026-10-03T23:00:00Z",
+          "status": {"period": 2, "displayClock": "2:45", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Featherweight", "abbreviation": "Featherweight"},
+          "competitors": [
+            {"id": "992600005", "order": 1, "winner": true, "athlete": {"id": "992600005", "displayName": "Fixture Submission Red"}, "records": [{"name": "overall", "type": "total", "summary": "13-1-0"}]},
+            {"id": "992600006", "order": 2, "winner": false, "athlete": {"id": "992600006", "displayName": "Fixture Submission Blue"}, "records": [{"name": "overall", "type": "total", "summary": "14-4-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Submission"}}]
+        },
+        {
+          "id": "991600004", "date": "2026-10-03T23:00:00Z",
+          "status": {"period": 3, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992600007", "order": 1, "winner": false, "athlete": {"id": "992600007", "displayName": "Fixture Draw Red"}, "records": [{"name": "overall", "type": "total", "summary": "15-5-1"}]},
+            {"id": "992600008", "order": 2, "winner": false, "athlete": {"id": "992600008", "displayName": "Fixture Draw Blue"}, "records": [{"name": "overall", "type": "total", "summary": "16-6-1"}]}
+          ],
+          "details": [{"type": {"text": "Majority Draw"}}]
+        },
+        {
+          "id": "991600005", "date": "2026-10-03T23:00:00Z",
+          "status": {"period": 1, "displayClock": "0:22", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Middleweight", "abbreviation": "Middleweight"},
+          "competitors": [
+            {"id": "992600009", "order": 1, "winner": false, "athlete": {"id": "992600009", "displayName": "Fixture No Contest Red"}, "records": [{"name": "overall", "type": "total", "summary": "17-3-0"}]},
+            {"id": "992600010", "order": 2, "winner": false, "athlete": {"id": "992600010", "displayName": "Fixture No Contest Blue"}, "records": [{"name": "overall", "type": "total", "summary": "18-4-0"}]}
+          ],
+          "details": [{"type": {"text": "No Contest"}}]
+        }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,8 @@ Examples:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+import copy
+from datetime import date, datetime, timedelta, timezone
 import os
 from urllib.parse import urlencode
 
@@ -26,6 +27,17 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 import scrapy
 
+from tapology_scraper.canonical_card_writer import (
+    CANONICAL_EVENT_FIELDS,
+    CanonicalCardWriteError,
+    MongoCanonicalCardStore,
+    submit_card_observations,
+)
+from tapology_scraper.admin_command_replay import with_admin_overrides
+from tapology_scraper.card_observation_sources import (
+    ObservationSourceError,
+    build_espn_card_observations,
+)
 from tapology_scraper.espn_etl import (
     age_on_date,
     calculate_pick_points,
@@ -34,17 +46,12 @@ from tapology_scraper.espn_etl import (
     event_status,
     find_bout_match,
     find_event_match,
-    infer_competition_sections,
-    infer_card_position,
     map_competitors_to_corners,
-    mongo_utc_datetime,
     safe_external_http_url,
     transform_athlete_profile,
     transform_athlete_records,
     transform_competition_metadata,
     transform_event,
-    transform_new_bout,
-    transform_result,
 )
 
 
@@ -207,6 +214,17 @@ class EspnSpider(scrapy.Spider):
         self.processed_bouts = 0
         self.results_loaded = 0
         self.profiles_loaded = 0
+        # SCR-015: every CardData mutation this spider performs goes through
+        # the canonical boundary.  The cached ESPN payload plus accumulated
+        # competition detail is resubmitted as observations, so a later detail
+        # response upgrades the same facts instead of overwriting them.
+        self.card_data_dry_run = str(
+            kwargs.get("CARD_DATA_DRY_RUN") or ""
+        ).lower() in {"1", "true", "yes"}
+        self.card_store = MongoCanonicalCardStore(self.db)
+        self._espn_cards: dict[int, dict] = {}
+        self.card_writes_applied = 0
+        self.card_writes_blocked = 0
 
     async def start(self):
         reconciled = self._reconcile_fully_resulted_events()
@@ -275,8 +293,16 @@ class EspnSpider(scrapy.Spider):
         return sorted(pending_dates)
 
     def _reconcile_fully_resulted_events(self) -> int:
-        """Repair past cards whose fights are done but event status stayed scheduled."""
-        reconciled = 0
+        """Report past cards whose fights are done but event status lags.
+
+        SCR-015 removed the direct lifecycle write this used to perform.
+        ``events.status`` and ``bouts.status`` are canonical fields now, so a
+        lagging card is repaired by refetching its ESPN payload — the observed
+        status flows through the boundary with evidence — and never by
+        inferring completion or cancellation from local document counts.
+        """
+
+        pending = 0
         latest_date = date.today() + timedelta(days=1)
         cursor = self.db.events.find(
             {
@@ -298,36 +324,123 @@ class EspnSpider(scrapy.Spider):
             if not event_has_all_results(bouts, expected_total):
                 continue
 
-            self._finish_event_and_bouts(event_id, bouts)
-            reconciled += 1
-        return reconciled
+            self.logger.info(
+                "Event %s has every result but is not completed; a canonical "
+                "ESPN observation is required to advance its lifecycle",
+                event_id,
+            )
+            pending += 1
+        return pending
 
-    def _finish_event_and_bouts(self, event_id: int, bouts: list[dict]):
-        result_ids = [bout["id"] for bout in bouts if has_fight_result(bout)]
-        stale_ids = [
-            bout["id"]
-            for bout in bouts
-            if bout.get("status") != "cancelled" and not has_fight_result(bout)
-        ]
-        if result_ids:
-            self.db.bouts.update_many(
-                {"id": {"$in": result_ids}},
-                {"$set": {"status": "completed"}},
+    def _submit_card_observations(self, event_id: int) -> None:
+        """Route the cached ESPN payload through the canonical boundary."""
+
+        cached = self._espn_cards.get(event_id)
+        if not cached or not cached.get("payload"):
+            return
+        state = self.card_store.load_card(event_id)
+        try:
+            batch = build_espn_card_observations(
+                cached["payload"],
+                state,
+                observed_at=cached["observed_at"],
+                competition_metadata=cached["details"],
             )
-        if stale_ids:
-            self.db.bouts.update_many(
-                {"id": {"$in": stale_ids}},
-                {"$set": {"status": "cancelled"}},
+        except ObservationSourceError as error:
+            self.card_writes_blocked += 1
+            self.logger.error(
+                "ESPN observations rejected for event %s: %s", event_id, error
             )
-        self.db.events.update_one(
-            {"id": event_id},
-            {
-                "$set": {
-                    "status": "completed",
-                    "espn_last_updated": datetime.utcnow(),
-                }
-            },
+            return
+        for finding in batch.findings:
+            self.logger.log(
+                40 if finding.severity in {"blocking", "error"} else 20,
+                "CardData %s %s on event %s: %s %s",
+                finding.severity,
+                finding.code,
+                event_id,
+                finding.message,
+                list(finding.example_ids),
+            )
+        if batch.blocked or not batch.observations:
+            self.card_writes_blocked += int(batch.blocked)
+            return
+        # Standing Admin decisions are replayed on every pass. Without this an
+        # `admin_override` only lasts until the next reconciliation, because the
+        # normalizer rebuilds the snapshot from observations alone (D-DATA-010).
+        observations, skipped = with_admin_overrides(
+            batch.observations, state, getattr(self, "db", None)
         )
+        for note in skipped:
+            self.logger.warning(
+                "Admin command skipped on event %s: %s", event_id, note
+            )
+        try:
+            plan, receipt = submit_card_observations(
+                self.card_store,
+                event_id,
+                observations,
+                dry_run=self.card_data_dry_run,
+            )
+        except CanonicalCardWriteError as error:
+            self.card_writes_blocked += 1
+            self.logger.error(
+                "Canonical card write failed for event %s: %s", event_id, error
+            )
+            return
+        if plan.blocked:
+            self.card_writes_blocked += 1
+            self.logger.error(
+                "Canonical card plan blocked for event %s: %s",
+                event_id,
+                [item.code for item in plan.findings],
+            )
+            return
+        if receipt.applied:
+            self.card_writes_applied += 1
+            self._assign_points_for_new_results(plan)
+
+    def _assign_points_for_new_results(self, plan) -> None:
+        """Rescore picks for bouts whose canonical result actually changed."""
+
+        for write in plan.bout_writes:
+            if "result" not in write.changed_fields:
+                continue
+            result = write.values.get("result")
+            if isinstance(result, dict) and result.get("winner_name"):
+                self.results_loaded += 1
+                self._assign_points(int(write.bout_id), result)
+
+    def _attach_espn_aliases(self, event_id: int, competitions: list[dict]) -> None:
+        """Link a local bout to its ESPN competition before any canonical write.
+
+        Name matching establishes the *alias* only.  Every canonical fact is
+        then resolved from that alias, so a fuzzy name never mutates CardData
+        directly.
+        """
+
+        existing = list(self.db.bouts.find({"event_id": event_id}))
+        linked = {
+            str(bout.get("espn_competition_id"))
+            for bout in existing
+            if bout.get("espn_competition_id") is not None
+        }
+        unlinked = [
+            bout for bout in existing if bout.get("espn_competition_id") is None
+        ]
+        for competition in competitions:
+            competition_id = str(competition.get("id") or "")
+            if not competition_id or competition_id in linked:
+                continue
+            match = find_bout_match(competition, unlinked)
+            if match is None:
+                continue
+            self.db.bouts.update_one(
+                {"id": match["id"]},
+                {"$set": {"espn_competition_id": competition_id}},
+            )
+            linked.add(competition_id)
+            unlinked = [bout for bout in unlinked if bout["id"] != match["id"]]
 
     def _date_query(self) -> str:
         if self.season:
@@ -518,7 +631,9 @@ class EspnSpider(scrapy.Spider):
             updates = {
                 key: value
                 for key, value in transformed.items()
-                if key not in protected_fields and value is not None
+                if key not in protected_fields
+                and key not in CANONICAL_EVENT_FIELDS
+                and value is not None
             }
             updates.update(
                 {
@@ -529,6 +644,8 @@ class EspnSpider(scrapy.Spider):
             )
             self.db.events.update_one({"id": internal_id}, {"$set": updates})
         else:
+            # Document creation only.  Canonical facts on the seed are
+            # immediately reconciled by the boundary in this same pass.
             self.db.events.update_one(
                 {"id": internal_id},
                 {"$setOnInsert": transformed},
@@ -538,82 +655,52 @@ class EspnSpider(scrapy.Spider):
         return self.db.events.find_one({"id": internal_id})
 
     def _process_card(self, espn_event: dict, internal_event: dict):
+        """Route the observed ESPN card through the canonical boundary.
+
+        SCR-015: this method no longer writes CardData.  It establishes source
+        aliases, submits typed observations, and then performs only auxiliary
+        enrichment and follow-up requests.  Bout/slot/result/lifecycle facts
+        are resolved by the normalizer and persisted by the reconciler, so a
+        later ESPN pass can never overwrite an Admin override or revive a
+        terminal bout.
+        """
+
         event_id = int(internal_event["id"])
         competitions = espn_event.get("competitions") or []
-        competition_sections = infer_competition_sections(competitions)
-        existing_bouts = list(self.db.bouts.find({"event_id": event_id}))
-        main_event_bout_id = None
-        matched_bout_ids: set[int] = set()
+        self._attach_espn_aliases(event_id, competitions)
 
-        for index, competition in enumerate(competitions):
-            existing_bout = find_bout_match(competition, existing_bouts)
-            if self.mode in {"results", "photos"} and not existing_bout:
+        cache = self._espn_cards.setdefault(
+            event_id, {"payload": None, "details": {}, "observed_at": None}
+        )
+        cache["payload"] = copy.deepcopy(espn_event)
+        cache["observed_at"] = datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        self._submit_card_observations(event_id)
+
+        bouts_by_competition = {}
+        bouts_by_id = {}
+        for bout in self.db.bouts.find({"event_id": event_id}):
+            bouts_by_id[int(bout["id"])] = bout
+            if bout.get("espn_competition_id") is not None:
+                bouts_by_competition[str(bout["espn_competition_id"])] = bout
+
+        for competition in competitions:
+            competition_id = str(competition.get("id") or "")
+            bout = bouts_by_competition.get(competition_id)
+            if bout is None and competition_id.isdigit():
+                bout = bouts_by_id.get(int(competition_id))
+            if bout is None:
                 self.logger.warning(
-                    "Skipping unmatched ESPN competition %s in event %s",
-                    competition.get("id"),
+                    "ESPN competition %s in event %s has no canonical bout",
+                    competition_id,
                     event_id,
                 )
-                continue
-
-            if not existing_bout and self.mode == "general":
-                bout = transform_new_bout(
-                    competition,
-                    event_id,
-                    index,
-                    len(competitions),
-                    competition_sections.get(str(competition.get("id") or "")),
-                )
-                self.db.bouts.update_one(
-                    {"id": bout["id"]},
-                    {"$setOnInsert": bout},
-                    upsert=True,
-                )
-                existing_bout = self.db.bouts.find_one({"id": bout["id"]})
-                existing_bouts.append(existing_bout)
-
-            if not existing_bout:
                 continue
 
             self.processed_bouts += 1
-            matched_bout_ids.add(int(existing_bout["id"]))
-            competition_completed = bool(
-                ((competition.get("status") or {}).get("type") or {}).get(
-                    "completed"
-                )
-            )
-            if existing_bout.get("status") == "cancelled" and not competition_completed:
-                self.db.bouts.update_one(
-                    {"id": existing_bout["id"]},
-                    {"$set": {"status": "scheduled"}},
-                )
-                existing_bout["status"] = "scheduled"
-            corner_mapping = map_competitors_to_corners(competition, existing_bout)
-            self._link_competitors(existing_bout, competition, corner_mapping)
-            summary_metadata = {
-                "card_section": competition_sections.get(
-                    str(competition.get("id") or "")
-                ),
-            }
-            if internal_event.get("timing_source") != "admin":
-                summary_metadata["automatic_lock_time_utc"] = (
-                    mongo_utc_datetime(competition.get("date"))
-                )
-            self.db.bouts.update_one(
-                {"id": existing_bout["id"]},
-                {
-                    "$set": {
-                        key: value
-                        for key, value in summary_metadata.items()
-                        if value is not None
-                    }
-                },
-            )
-
-            if existing_bout.get("is_main_event") or index == len(competitions) - 1:
-                main_event_bout_id = int(existing_bout["id"])
-
-            if self.mode in {"general", "results"}:
-                self._load_result(existing_bout, competition, corner_mapping)
+            corner_mapping = map_competitors_to_corners(competition, bout)
+            self._link_competitors(bout, competition, corner_mapping)
 
             if self.mode in {"general", "photos"}:
                 for competitor in corner_mapping.values():
@@ -625,91 +712,9 @@ class EspnSpider(scrapy.Spider):
             if self.mode == "general":
                 yield self._competition_request(
                     str(espn_event["id"]),
-                    str(competition["id"]),
-                    int(existing_bout["id"]),
+                    competition_id,
+                    int(bout["id"]),
                 )
-
-            self._ensure_card_slot(
-                existing_bout,
-                event_id,
-                index,
-                len(competitions),
-                competition_sections.get(str(competition.get("id") or "")),
-            )
-
-        event_update = {
-            "total_bouts": len(competitions),
-            "espn_event_id": str(espn_event["id"]),
-            "espn_last_updated": datetime.utcnow(),
-        }
-        if main_event_bout_id:
-            event_update["main_event_bout_id"] = main_event_bout_id
-
-        self.db.events.update_one({"id": event_id}, {"$set": event_update})
-
-        current_bouts = list(self.db.bouts.find({"event_id": event_id}))
-        matched_bouts = [
-            bout
-            for bout in current_bouts
-            if int(bout["id"]) in matched_bout_ids
-        ]
-        card_is_authoritative = (
-            self.mode in {"general", "photos"}
-            and bool(competitions)
-            and len(matched_bout_ids) == len(competitions)
-            and event_is_near(internal_event)
-        )
-        if card_is_authoritative:
-            removed_bout_ids = [
-                bout["id"]
-                for bout in current_bouts
-                if int(bout["id"]) not in matched_bout_ids
-                and bout.get("status") == "scheduled"
-                and not has_fight_result(bout)
-            ]
-            if removed_bout_ids:
-                self.db.bouts.update_many(
-                    {"id": {"$in": removed_bout_ids}},
-                    {
-                        "$set": {
-                            "status": "cancelled",
-                            "espn_removed_from_card_at": datetime.utcnow(),
-                        }
-                    },
-                )
-                self.logger.info(
-                    "Cancelled %s local bouts removed from ESPN event %s",
-                    len(removed_bout_ids),
-                    event_id,
-                )
-                current_bouts = list(
-                    self.db.bouts.find({"event_id": event_id})
-                )
-                matched_bouts = [
-                    bout
-                    for bout in current_bouts
-                    if int(bout["id"]) in matched_bout_ids
-                ]
-        if event_has_all_results(matched_bouts, len(competitions)):
-            # Once every fight ESPN lists has a result, unmatched local bouts
-            # are cancelled/removed-from-card fights, not pending results.
-            self._finish_event_and_bouts(event_id, current_bouts)
-        elif event_status(espn_event) == "completed":
-            unmatched_ids = [
-                bout["id"]
-                for bout in current_bouts
-                if int(bout["id"]) not in matched_bout_ids
-                and bout.get("status") != "cancelled"
-                and not has_fight_result(bout)
-            ]
-            if unmatched_ids:
-                self.db.bouts.update_many(
-                    {"id": {"$in": unmatched_ids}},
-                    {"$set": {"status": "cancelled"}},
-                )
-                current_bouts = list(self.db.bouts.find({"event_id": event_id}))
-            if event_has_all_results(current_bouts):
-                self._finish_event_and_bouts(event_id, current_bouts)
 
     def _link_competitors(
         self,
@@ -726,7 +731,10 @@ class EspnSpider(scrapy.Spider):
         )
         for corner, competitor in corner_mapping.items():
             snapshot = competitor_snapshot(competitor)
-            for field in ("espn_id", "espn_url", "fighter_name", "nationality"):
+            # ``fighter_name`` is a canonical CardData fact resolved from the
+            # bout observation, so this auxiliary enrichment only owns the
+            # embedded profile fields around it.
+            for field in ("espn_id", "espn_url", "nationality"):
                 value = snapshot.get(field)
                 if value and value != "Unknown":
                     set_fields[f"fighters.{corner}.{field}"] = value
@@ -772,48 +780,6 @@ class EspnSpider(scrapy.Spider):
                 upsert=True,
             )
 
-    def _load_result(
-        self,
-        bout: dict,
-        competition: dict,
-        corner_mapping: dict[str, dict],
-    ):
-        result = transform_result(competition, corner_mapping)
-        if not result:
-            return
-
-        current = self.db.bouts.find_one({"id": bout["id"]}, {"result": 1})
-        if current and current.get("result"):
-            return
-
-        now = datetime.utcnow()
-        self.db.bouts.update_one(
-            {"id": bout["id"]},
-            {
-                "$set": {
-                    "result": result,
-                    "status": "completed",
-                    "espn_competition_id": str(competition["id"]),
-                    "last_updated": now,
-                }
-            },
-        )
-        self.db.bout_details.update_one(
-            {"bout_id": bout["id"]},
-            {
-                "$set": {
-                    "event_id": bout["event_id"],
-                    "result": result,
-                    "espn_competition_id": str(competition["id"]),
-                    "last_updated": now,
-                },
-                "$setOnInsert": {"_id": bout["id"]},
-            },
-            upsert=True,
-        )
-        self._assign_points(int(bout["id"]), result)
-        self.results_loaded += 1
-
     def _assign_points(self, bout_id: int, result: dict):
         users_affected = set()
         for pick in self.db.picks.find({"bout_id": bout_id}):
@@ -853,38 +819,10 @@ class EspnSpider(scrapy.Spider):
                 },
             )
 
-    def _ensure_card_slot(
-        self,
-        bout: dict,
-        event_id: int,
-        index: int,
-        total: int,
-        card_section: str | None = None,
-    ):
-        if self.db.event_card_slots.find_one({"bout_id": bout["id"]}):
-            return
-
-        position = infer_card_position(index, total)
-        if card_section:
-            position["card_section"] = card_section
-        self.db.event_card_slots.update_one(
-            {"id": f"{event_id}:{bout['id']}"},
-            {
-                "$setOnInsert": {
-                    "_id": f"{event_id}:{bout['id']}",
-                    "id": f"{event_id}:{bout['id']}",
-                    "event_id": event_id,
-                    "bout_id": int(bout["id"]),
-                    "card_section": position["card_section"],
-                    "order_overall": position["order_overall"],
-                    "order_section": position["order_section"],
-                    "is_main_event": position["is_main_event"],
-                    "is_co_main": position["is_co_main"],
-                    "source": "espn",
-                }
-            },
-            upsert=True,
-        )
+    # SCR-015 removed ``_ensure_card_slot``.  ``event_card_slots`` is owned
+    # exclusively by ``plan_slot_reconciliation`` through the canonical
+    # boundary, which converges after reorders, replacements and removals
+    # instead of inserting a slot once and never revisiting it.
 
     def _athlete_request(self, athlete_id: str) -> scrapy.Request:
         params = {"lang": "en", "region": "us"}
@@ -914,36 +852,55 @@ class EspnSpider(scrapy.Spider):
         )
 
     def parse_competition_metadata(self, response, bout_id: int):
+        """Feed explicit ESPN detail into the canonical boundary.
+
+        The detail payload used to overwrite slot placement directly, which
+        also wrote a global match number into the section-local order.  It now
+        becomes an ``espn_detail`` observation: it outranks scoreboard
+        inference for section and timing, while both order fields are derived
+        once, after final section grouping.
+        """
+
         metadata = _non_empty_fields(
             transform_competition_metadata(response.json())
         )
         bout = self.db.bouts.find_one(
             {"id": bout_id},
-            {"event_id": 1},
+            {"event_id": 1, "espn_competition_id": 1},
         ) or {}
-        event = self.db.events.find_one(
-            {"id": bout.get("event_id")},
-            {"timing_source": 1},
-        ) or {}
-        if event.get("timing_source") == "admin":
-            metadata.pop("automatic_lock_time_utc", None)
-        metadata["espn_last_updated"] = datetime.utcnow()
-        self.db.bouts.update_one({"id": bout_id}, {"$set": metadata})
+        event_id = bout.get("event_id")
+        competition_id = str(bout.get("espn_competition_id") or "")
 
-        slot = self.db.event_card_slots.find_one({"bout_id": bout_id})
-        if slot and slot.get("source") == "espn":
-            self.db.event_card_slots.update_one(
-                {"_id": slot["_id"]},
-                {
-                    "$set": {
-                        "card_section": metadata["card_section"],
-                        "order_overall": metadata["espn_match_number"],
-                        "order_section": metadata["espn_match_number"],
-                        "is_main_event": metadata["is_main_event"],
-                        "is_co_main": metadata["is_co_main_event"],
-                    }
-                },
+        # Auxiliary ESPN bookkeeping only; every canonical fact below travels
+        # as an observation instead.
+        self.db.bouts.update_one(
+            {"id": bout_id},
+            {
+                "$set": {
+                    "espn_match_number": metadata.get("espn_match_number"),
+                    "espn_card_segment": metadata.get("espn_card_segment"),
+                    "espn_last_updated": datetime.utcnow(),
+                }
+            },
+        )
+
+        cache = self._espn_cards.get(event_id)
+        if not cache or not competition_id:
+            return
+        cache["details"][competition_id] = {
+            key: value
+            for key, value in (
+                ("card_section", metadata.get("card_section")),
+                ("rounds_scheduled", metadata.get("rounds_scheduled")),
+                ("weight_class", metadata.get("weight_class")),
+                (
+                    "automatic_lock_time_utc",
+                    metadata.get("automatic_lock_time_utc"),
+                ),
             )
+            if value is not None
+        }
+        self._submit_card_observations(int(event_id))
 
     def parse_athlete(self, response, athlete_id: str):
         profile = transform_athlete_profile(response.json())

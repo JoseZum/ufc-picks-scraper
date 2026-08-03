@@ -10,6 +10,8 @@ import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 
+from tapology_scraper.canonical_card_writer import strip_admin_owned
+
 
 class MongoDBPipeline:
     """
@@ -149,10 +151,14 @@ class MongoDBPipeline:
         # Remove None values
         bout_doc = {k: v for k, v in bout_doc.items() if v is not None}
 
+        # D-DATA-010: Admin owns the title fields outright, in both directions.
+        # `existing` was already loaded above to preserve fighter images.
+        writable = strip_admin_owned(bout_doc, existing_bout)
+
         # Upsert bout
         await self.db.bouts.update_one(
             {"id": bout_id},
-            {"$set": bout_doc},
+            {"$set": writable},
             upsert=True
         )
 

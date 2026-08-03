@@ -1,0 +1,88 @@
+{
+  "_fixture": {
+    "scenario_id": "title_heavy_missing_explicit_flag",
+    "sanitized": true,
+    "source_shape": "espn_scoreboard_plus_competition_detail",
+    "note": "Belt accolades are present but titleFight is intentionally absent."
+  },
+  "events": [
+    {
+      "id": "990100003",
+      "name": "UFC 998: Fixture Champion vs. Fixture Challenger",
+      "date": "2026-05-09T21:00:00Z",
+      "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+      "competitions": [
+        {
+          "id": "991300001",
+          "date": "2026-05-09T21:00:00Z",
+          "matchNumber": 5,
+          "cardSegment": {"id": "171", "description": "Early Prelims", "name": "prelims2"},
+          "status": {"period": 3, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Flyweight", "abbreviation": "Flyweight"},
+          "competitors": [
+            {"id": "992300001", "order": 1, "winner": true, "athlete": {"id": "992300001", "displayName": "Fixture Kestrel", "flag": {"alt": "USA"}}, "records": [{"name": "overall", "type": "total", "summary": "9-1-0"}]},
+            {"id": "992300002", "order": 2, "winner": false, "athlete": {"id": "992300002", "displayName": "Fixture Lark", "flag": {"alt": "Japan"}}, "records": [{"name": "overall", "type": "total", "summary": "10-2-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Decision"}}]
+        },
+        {
+          "id": "991300002",
+          "date": "2026-05-09T23:00:00Z",
+          "matchNumber": 4,
+          "cardSegment": {"id": "172", "description": "Preliminary Card", "name": "prelims"},
+          "status": {"period": 2, "displayClock": "2:09", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992300003", "order": 1, "winner": false, "athlete": {"id": "992300003", "displayName": "Fixture Maple", "flag": {"alt": "Canada"}}, "records": [{"name": "overall", "type": "total", "summary": "12-3-0"}]},
+            {"id": "992300004", "order": 2, "winner": true, "athlete": {"id": "992300004", "displayName": "Fixture Nettle", "flag": {"alt": "England"}}, "records": [{"name": "overall", "type": "total", "summary": "11-2-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Submission"}}]
+        },
+        {
+          "id": "991300003",
+          "date": "2026-05-10T01:00:00Z",
+          "matchNumber": 3,
+          "cardSegment": {"id": "173", "description": "Main Card", "name": "main"},
+          "status": {"period": 1, "displayClock": "4:10", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}},
+          "type": {"text": "Middleweight", "abbreviation": "Middleweight"},
+          "competitors": [
+            {"id": "992300005", "order": 1, "winner": true, "athlete": {"id": "992300005", "displayName": "Fixture Oak", "flag": {"alt": "Australia"}}, "records": [{"name": "overall", "type": "total", "summary": "14-2-0"}]},
+            {"id": "992300006", "order": 2, "winner": false, "athlete": {"id": "992300006", "displayName": "Fixture Pine", "flag": {"alt": "New Zealand"}}, "records": [{"name": "overall", "type": "total", "summary": "16-4-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Kotko"}}]
+        },
+        {
+          "id": "991300004",
+          "date": "2026-05-10T01:00:00Z",
+          "matchNumber": 2,
+          "cardSegment": {"id": "173", "description": "Main Card", "name": "main"},
+          "status": {"period": 5, "displayClock": "5:00", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 5}},
+          "type": {"text": "Flyweight", "abbreviation": "Flyweight"},
+          "competitors": [
+            {"id": "992300007", "order": 1, "winner": true, "athlete": {"id": "992300007", "displayName": "Fixture Quill", "flag": {"alt": "USA"}, "accolades": [{"id": "fixture-belt-1", "name": "UFC Flyweight Title", "type": "Belt"}]}, "records": [{"name": "overall", "type": "total", "summary": "18-1-0"}]},
+            {"id": "992300008", "order": 2, "winner": false, "athlete": {"id": "992300008", "displayName": "Fixture Reed", "flag": {"alt": "Brazil"}}, "records": [{"name": "overall", "type": "total", "summary": "17-2-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Decision"}}]
+        },
+        {
+          "id": "991300005",
+          "date": "2026-05-10T01:00:00Z",
+          "matchNumber": 1,
+          "cardSegment": {"id": "173", "description": "Main Card", "name": "main"},
+          "status": {"period": 3, "displayClock": "0:44", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 5}},
+          "type": {"text": "Middleweight", "abbreviation": "Middleweight"},
+          "competitors": [
+            {"id": "992300009", "order": 1, "winner": true, "athlete": {"id": "992300009", "displayName": "Fixture Champion", "flag": {"alt": "Georgia"}, "accolades": [{"id": "fixture-belt-2", "name": "UFC Middleweight Title", "type": "Belt"}]}, "records": [{"name": "overall", "type": "total", "summary": "22-0-0"}]},
+            {"id": "992300010", "order": 2, "winner": false, "athlete": {"id": "992300010", "displayName": "Fixture Challenger", "flag": {"alt": "South Africa"}}, "records": [{"name": "overall", "type": "total", "summary": "21-2-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Submission"}}]
+        }
+      ]
+    }
+  ]
+}

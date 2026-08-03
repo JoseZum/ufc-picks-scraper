@@ -1,0 +1,91 @@
+{
+  "fixture_set_version": "espn-card-data-v1",
+  "created_at": "2026-07-31T23:00:00Z",
+  "source_observed_at": "2026-07-31T23:00:00Z",
+  "sanitized": true,
+  "id_ranges": {
+    "events": "990100001-990100007",
+    "competitions": "991100001-991700999",
+    "athletes": "992100001-992700999"
+  },
+  "scenarios": [
+    {
+      "id": "fight_night_two_sections",
+      "files": ["fight_night_two_sections.json"],
+      "kind": "single_snapshot",
+      "expectations": {
+        "competition_count": 4,
+        "time_group_count": 2,
+        "inferred_section_counts": {"prelim": 2, "main": 2},
+        "event_status": "completed"
+      }
+    },
+    {
+      "id": "numbered_three_sections",
+      "files": ["numbered_three_sections.json"],
+      "kind": "single_snapshot",
+      "expectations": {
+        "competition_count": 6,
+        "time_group_count": 3,
+        "inferred_section_counts": {"early_prelim": 2, "prelim": 2, "main": 2},
+        "event_status": "scheduled"
+      }
+    },
+    {
+      "id": "title_heavy_missing_explicit_flag",
+      "files": ["title_heavy_missing_explicit_flag.json"],
+      "kind": "single_snapshot",
+      "expectations": {
+        "competition_count": 5,
+        "belt_accolade_competition_count": 2,
+        "explicit_title_fight_field_count": 0,
+        "explicit_card_segment_count": 5,
+        "explicit_match_number_count": 5
+      }
+    },
+    {
+      "id": "card_change_cancellation_reorder",
+      "files": ["card_change_before.json", "card_change_after.json"],
+      "kind": "before_after",
+      "expectations": {
+        "removed_competition_ids": ["991400002"],
+        "before_competition_order": ["991400001", "991400002", "991400003", "991400004"],
+        "after_competition_order": ["991400001", "991400004", "991400003"]
+      }
+    },
+    {
+      "id": "fighter_replacement_reused_competition",
+      "files": ["replacement_before.json", "replacement_after.json"],
+      "kind": "before_after",
+      "expectations": {
+        "competition_id": "991500002",
+        "before_fighter_ids": ["992500003", "992500004"],
+        "after_fighter_ids": ["992500003", "992500005"]
+      }
+    },
+    {
+      "id": "result_outcomes",
+      "files": ["result_outcomes.json"],
+      "kind": "single_snapshot",
+      "expectations": {
+        "normalized": {
+          "991600001": {"outcome": "red", "method": "DEC", "round": 3},
+          "991600002": {"outcome": "blue", "method": "KO/TKO", "round": 1},
+          "991600003": {"outcome": "red", "method": "SUB", "round": 2},
+          "991600004": {"outcome": "draw", "method": "DEC", "round": 3},
+          "991600005": {"outcome": "nc", "method": "NC", "round": 1}
+        }
+      }
+    },
+    {
+      "id": "result_correction",
+      "files": ["result_correction_before.json", "result_correction_after.json"],
+      "kind": "before_after",
+      "expectations": {
+        "competition_id": "991700001",
+        "before": {"outcome": "red", "method": "DEC", "round": 3},
+        "after": {"outcome": "blue", "method": "SUB", "round": 2}
+      }
+    }
+  ]
+}

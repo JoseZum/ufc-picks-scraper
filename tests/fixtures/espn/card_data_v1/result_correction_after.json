@@ -1,0 +1,23 @@
+{
+  "_fixture": {"scenario_id": "result_correction", "variant": "after", "sanitized": true, "source_shape": "espn_scoreboard_event"},
+  "events": [
+    {
+      "id": "990100007",
+      "name": "UFC Fixture Result Correction",
+      "date": "2026-10-10T23:00:00Z",
+      "status": {"type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+      "competitions": [
+        {
+          "id": "991700001", "date": "2026-10-10T23:00:00Z",
+          "status": {"period": 2, "displayClock": "3:33", "type": {"name": "STATUS_FINAL", "state": "post", "completed": true}},
+          "format": {"regulation": {"periods": 3}}, "type": {"text": "Lightweight", "abbreviation": "Lightweight"},
+          "competitors": [
+            {"id": "992700001", "order": 1, "winner": false, "athlete": {"id": "992700001", "displayName": "Fixture Correction Red"}, "records": [{"name": "overall", "type": "total", "summary": "12-2-0"}]},
+            {"id": "992700002", "order": 2, "winner": true, "athlete": {"id": "992700002", "displayName": "Fixture Correction Blue"}, "records": [{"name": "overall", "type": "total", "summary": "11-3-0"}]}
+          ],
+          "details": [{"type": {"text": "Unofficial Winner Submission"}}]
+        }
+      ]
+    }
+  ]
+}
