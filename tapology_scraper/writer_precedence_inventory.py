@@ -205,22 +205,22 @@ class Discrepancy:
 
 MUTATION_FILES = (
     MutationFile(
-        "ufc-picks-scraper/backfill_2026.py",
+        "ufc-picks-scraper/legacy/backfill_2026.py",
         "migration_orchestrator",
         "One-time event alias/identity restoration around the ESPN writer.",
     ),
     MutationFile(
-        "ufc-picks-scraper/backfill_2026_timing.py",
+        "ufc-picks-scraper/legacy/backfill_2026_timing.py",
         "migration_orchestrator",
         "Runs the ESPN timing writer and records a migration marker.",
     ),
     MutationFile(
-        "ufc-picks-scraper/fix_nationality_data.py",
+        "ufc-picks-scraper/legacy/fix_nationality_data.py",
         "auxiliary_enrichment",
         "Repairs embedded fighter nationality only.",
     ),
     MutationFile(
-        "ufc-picks-scraper/fix_ranking_data.py",
+        "ufc-picks-scraper/legacy/fix_ranking_data.py",
         "auxiliary_enrichment",
         "Repairs embedded fighter ranking only.",
     ),
@@ -230,12 +230,12 @@ MUTATION_FILES = (
         "Legacy JSONL Tapology event/bout ingest, cleanup and deletion path.",
     ),
     MutationFile(
-        "ufc-picks-scraper/scheduler.py",
+        "ufc-picks-scraper/legacy/scheduler.py",
         "migration_orchestrator",
         "Legacy scrape-window marker and Tapology ingest orchestrator.",
     ),
     MutationFile(
-        "ufc-picks-scraper/sync_image_keys.py",
+        "ufc-picks-scraper/legacy/sync_image_keys.py",
         "auxiliary_enrichment",
         "Synchronizes embedded fighter image keys only.",
     ),
@@ -705,9 +705,9 @@ WRITER_PATHS = (
         "scraper",
         "migration_or_legacy",
         (
-            "ufc-picks-scraper/backfill_2026.py",
-            "ufc-picks-scraper/backfill_2026_timing.py",
-            "ufc-picks-scraper/scheduler.py",
+            "ufc-picks-scraper/legacy/backfill_2026.py",
+            "ufc-picks-scraper/legacy/backfill_2026_timing.py",
+            "ufc-picks-scraper/legacy/scheduler.py",
         ),
         ("run_backfill", "backfill_2026_timing.main", "scheduler module loop"),
         ("events",),

@@ -67,23 +67,12 @@ Use `-a FORCE_PHOTOS=true` to replace already-mirrored ESPN headshots.
 
 </details>
 
-### One-time 2026 historical completion
+### Retired one-time migrations
 
-The manual GitHub Actions option `backfill_2026` runs the isolated
-`backfill_2026.py` migration. It imports only completed 2026 UFC cards,
-connects the legacy UFC White House event to ESPN Freedom 250, fills historical
-results and posters, validates every result and poster URL, and records a Mongo
-completion marker so it will not run twice. Scheduled scraper windows are not
-changed.
-
-### One-time 2026 scheduled timing backfill
-
-The manual GitHub Actions option `backfill_timing_2026` runs
-`backfill_2026_timing.py`. It imports scheduled 2026 cards, maps every fight to
-Main Card, Prelims, or Early Prelims, stores each section's UTC start/lock
-time, and verifies the linked bouts before writing its own one-time Mongo
-completion marker. Events with `timing_source=admin` keep their manually edited
-schedule.
+The 2026 historical-completion and scheduled-timing backfills have both run and
+recorded their Mongo completion markers, so their `workflow_dispatch` options
+were removed and the scripts moved to [`legacy/`](legacy/README.md) alongside
+the other retired one-off repairs. Scheduled scraper windows are unaffected.
 
 ## Data sources
 
