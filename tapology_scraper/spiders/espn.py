@@ -152,7 +152,7 @@ class EspnSpider(scrapy.Spider):
     custom_settings = {
         "DOWNLOAD_DELAY": 0.15,
         "CONCURRENT_REQUESTS_PER_DOMAIN": 6,
-        "ROBOTSTXT_OBEY": True,
+        "ROBOTSTXT_OBEY": False,
         "FEED_EXPORT_ENCODING": "utf-8",
         "ITEM_PIPELINES": {
             "tapology_scraper.spiders.espn.EspnFighterImagePipeline": 300,

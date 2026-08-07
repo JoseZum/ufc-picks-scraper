@@ -26,7 +26,15 @@ on:
           - espn_results
           - espn_general
           - espn_photos
+          - event_images_season
         default: scheduled
+      season:
+        description: >-
+          Season to re-resolve posters for with mode=event_images_season, e.g.
+          2026. The daily image job only looks 14 days back, so a card whose
+          poster lookup failed once can never be retried by the schedule.
+        type: string
+        default: "2026"
 
 jobs:
   scheduled:
@@ -90,6 +98,26 @@ jobs:
           set -o pipefail
           scrapy crawl event_images 2>&1 | tee event-images.log
           ! grep -Eq "EVENT_IMAGE_COVERAGE_FAILED|spider_exceptions/count" event-images.log
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+  event-images-season:
+    name: Re-resolve Event Posters for a Season
+    runs-on: ubuntu-latest
+    # Manual only. The daily `images` job is scoped to the display window, so a
+    # completed card that missed its poster stays blank forever; this is the
+    # only way to go back for it.
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.mode == 'event_images_season'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Resolve posters and heroes for the whole season
+        run: scrapy crawl event_images -a SEASON=${{ github.event.inputs.season }}
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 

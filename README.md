@@ -67,6 +67,14 @@ Use `-a FORCE_PHOTOS=true` to replace already-mirrored ESPN headshots.
 
 </details>
 
+### Recovering a missed poster
+
+The daily `images` job only looks at cards inside the display window (14 days
+back, 75 ahead), so a card whose Wikipedia/UFC lookup failed while it was in
+range is never retried once it falls out — it stays blank permanently. Run the
+`event_images_season` dispatch option with a `season` (e.g. `2026`) to
+re-resolve posters and heroes for that whole season regardless of the window.
+
 ### Retired one-time migrations
 
 The 2026 historical-completion and scheduled-timing backfills have both run and
