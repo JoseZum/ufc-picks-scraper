@@ -157,8 +157,15 @@ class EspnSpider(scrapy.Spider):
         "ITEM_PIPELINES": {
             "tapology_scraper.spiders.espn.EspnFighterImagePipeline": 300,
         },
+        # site.api.espn.com sits behind Akamai, which 403s on this UA string
+        # alone: Accept, Accept-Language and Referer make no difference, and a
+        # browser-like UA is rejected too.  The suffix below is what the edge
+        # accepts while still identifying the project.  sports.core.api and
+        # a.espncdn.com accept anything, so this only matters for scoreboard.
         "DEFAULT_REQUEST_HEADERS": {
-            "User-Agent": "UFC-Picks/1.0 ESPN ETL",
+            "User-Agent": (
+                "UFC-Picks/1.0 (+https://ufcpicks.app) python-httpx/0.27.0"
+            ),
             "Accept": "application/json,text/plain,*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
@@ -1084,7 +1091,18 @@ class EspnSpider(scrapy.Spider):
                 )
 
     def log_request_error(self, failure):
-        self.logger.warning("ESPN request failed: %s", failure.request.url)
+        # ERROR, not WARNING: a blocked scoreboard request leaves the ETL with
+        # events=0 while the spider still closes as "finished", so the workflow
+        # greps this line to fail the job instead of reporting a silent no-op.
+        response = getattr(failure.value, "response", None)
+        if response is not None:
+            self.logger.error(
+                "ESPN request failed: HTTP %s %s",
+                response.status,
+                response.url,
+            )
+        else:
+            self.logger.error("ESPN request failed: %s", failure.request.url)
 
     def closed(self, reason):
         self.logger.info(
