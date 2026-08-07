@@ -56,6 +56,7 @@ from tapology_scraper.espn_etl import (
 
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
+ESPN_USER_AGENT = "UFC-Picks/1.0 (+https://ufcpicks.app) python-httpx/0.27.0"
 ESPN_ATHLETE_URL = (
     "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes/{athlete_id}"
 )
@@ -157,15 +158,16 @@ class EspnSpider(scrapy.Spider):
         "ITEM_PIPELINES": {
             "tapology_scraper.spiders.espn.EspnFighterImagePipeline": 300,
         },
-        # site.api.espn.com sits behind Akamai, which 403s on this UA string
+        # site.api.espn.com sits behind Akamai, which 403s on the UA string
         # alone: Accept, Accept-Language and Referer make no difference, and a
-        # browser-like UA is rejected too.  The suffix below is what the edge
+        # browser-like UA is rejected too.  The value below is what the edge
         # accepts while still identifying the project.  sports.core.api and
         # a.espncdn.com accept anything, so this only matters for scoreboard.
+        # Set in both places so it holds regardless of whether DefaultHeaders
+        # or UserAgentMiddleware wins.
+        "USER_AGENT": ESPN_USER_AGENT,
         "DEFAULT_REQUEST_HEADERS": {
-            "User-Agent": (
-                "UFC-Picks/1.0 (+https://ufcpicks.app) python-httpx/0.27.0"
-            ),
+            "User-Agent": ESPN_USER_AGENT,
             "Accept": "application/json,text/plain,*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
