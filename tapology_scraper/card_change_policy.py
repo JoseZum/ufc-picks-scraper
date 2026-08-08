@@ -233,6 +233,12 @@ class CardChangePolicyResult:
     presence_states: tuple[BoutPresenceState, ...]
     policy_change_set: Mapping[str, Any]
     findings: tuple[PolicyFinding, ...]
+    #: Removal observations the policy synthesised for this run. The policy is
+    #: pure, so it only normalises them in memory; a caller that persists has to
+    #: feed these to the canonical writer or the confirmed removal never lands.
+    #: Kept out of `as_dict` on purpose: it is a caller handle, not policy state
+    #: (the decision itself is already recorded in `policy_change_set`).
+    synthetic_observations: tuple[CardDataObservation, ...] = ()
 
     @property
     def snapshot(self) -> Mapping[str, Any]:
@@ -1175,6 +1181,7 @@ def apply_card_change_policy(
         findings=tuple(
             sorted(unique_findings.values(), key=_finding_sort_key)
         ),
+        synthetic_observations=tuple(synthetic),
     )
 
 

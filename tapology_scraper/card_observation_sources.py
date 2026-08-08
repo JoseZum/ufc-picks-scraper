@@ -108,6 +108,10 @@ class ObservationBatch:
     event_id: int
     observations: tuple[Mapping[str, Any], ...] = ()
     findings: tuple[SourceFinding, ...] = ()
+    #: Canonical bouts this payload actually contained. The absence policy needs
+    #: presence, not just the observations, because a bout that vanished is
+    #: precisely the one with nothing to observe.
+    present_bout_ids: tuple[int, ...] = ()
 
     @property
     def blocked(self) -> bool:
@@ -701,6 +705,7 @@ def build_espn_card_observations(
         event_id=event_id,
         observations=tuple(observations),
         findings=tuple(findings),
+        present_bout_ids=tuple(sorted(matched_bout_ids)),
     )
 
 

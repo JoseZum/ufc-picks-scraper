@@ -240,6 +240,15 @@ MUTATION_FILES = (
         "Synchronizes embedded fighter image keys only.",
     ),
     MutationFile(
+        "ufc-picks-scraper/tapology_scraper/card_presence_replay.py",
+        "auxiliary_enrichment",
+        (
+            "Persists absence-policy evidence in `card_presence_states` only. "
+            "Touches no card collection: the removal it confirms reaches the "
+            "card as an observation through the canonical boundary."
+        ),
+    ),
+    MutationFile(
         "ufc-picks-scraper/tapology_scraper/pipelines.py",
         "core_card_writer",
         "Direct asynchronous Tapology event/bout upsert pipeline.",

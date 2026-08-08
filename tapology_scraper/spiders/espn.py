@@ -38,6 +38,11 @@ from tapology_scraper.card_observation_sources import (
     ObservationSourceError,
     build_espn_card_observations,
 )
+from tapology_scraper.card_presence_replay import (
+    build_coverage,
+    store_presence_states,
+    with_change_policy,
+)
 from tapology_scraper.espn_etl import (
     age_on_date,
     calculate_pick_points,
@@ -384,6 +389,18 @@ class EspnSpider(scrapy.Spider):
             self.logger.warning(
                 "Admin command skipped on event %s: %s", event_id, note
             )
+        # SCR-010's absence policy decides when a bout that vanished from ESPN
+        # has been gone long enough to remove. Without this call the boundary
+        # only ever logs BOUT_ABSENT_FROM_ESPN_PAYLOAD and the stale bout stays
+        # on the card forever, which is how a changed matchup ends up shown
+        # twice.
+        coverage = self._build_coverage(event_id, cached, batch)
+        observations, policy, notes = with_change_policy(
+            observations, state, coverage, getattr(self, "db", None)
+        )
+        for note in notes:
+            self.logger.info("Card change policy on event %s: %s", event_id, note)
+
         try:
             plan, receipt = submit_card_observations(
                 self.card_store,
@@ -408,6 +425,49 @@ class EspnSpider(scrapy.Spider):
         if receipt.applied:
             self.card_writes_applied += 1
             self._assign_points_for_new_results(plan)
+            # Only after the write lands. Persisting a miss for a write that
+            # never applied would let a later run reach the removal threshold
+            # on evidence the card never actually reflected.
+            if policy is not None and not self.card_data_dry_run:
+                stored = store_presence_states(
+                    self.db, event_id, policy.presence_states
+                )
+                if stored:
+                    self.logger.info(
+                        "Tracking %s missing bout(s) on event %s",
+                        stored,
+                        event_id,
+                    )
+
+    def _build_coverage(self, event_id: int, cached: dict, batch):
+        """Declare what this ESPN payload contained, for the absence policy.
+
+        Only a payload with per-competition detail counts as `complete`; the
+        scoreboard alone can omit bouts for reasons that are not removal, and
+        the policy must never confirm a removal on that.
+        """
+        payload = cached.get("payload")
+        if not payload:
+            return None
+        source_event_id = str(payload.get("id") or event_id)
+        details = cached.get("details") or {}
+        complete = bool(details) and len(details) >= len(batch.present_bout_ids)
+        try:
+            return build_coverage(
+                event_id,
+                batch.present_bout_ids,
+                observed_at=cached["observed_at"],
+                source_event_id=source_event_id,
+                payload=payload,
+                coverage_kind="complete" if complete else "partial",
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            self.logger.warning(
+                "Could not declare ESPN coverage for event %s: %s",
+                event_id,
+                error,
+            )
+            return None
 
     def _assign_points_for_new_results(self, plan) -> None:
         """Rescore picks for bouts whose canonical result actually changed."""

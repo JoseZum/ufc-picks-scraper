@@ -258,7 +258,7 @@ MongoDB client, open a connection, call current writers, or write production
 data. Legacy bout placement fields are available only as a read-model
 projection through `legacy_bout_slot_projection`; they are not dual-written.
 
-## Late card-change policy (pure/in-memory)
+## Late card-change policy (wired through `card_presence_replay`)
 
 `tapology_scraper.card_change_policy` wraps the normalizer with the SCR-010
 lifecycle and disappearance rules:
@@ -370,6 +370,37 @@ Every job can also be triggered manually from the workflow dispatch menu.
 ```bash
 pytest
 ```
+
+### Local-first rule for boundary changes
+
+Anything that touches the CardData boundary — normalizer, change policy, slot
+reconciliation, canonical writer or the wiring between them — is proven against
+local fixtures **before** it is allowed near Mongo or a scheduled run:
+
+1. Drive the change through `InMemoryCanonicalCardStore`, which exists for
+   exactly this ("deterministic local double used by tests and dry-run
+   tooling"). Presence evidence and any other sidecar state go to a plain
+   JSON-backed double, never to a database.
+2. Run the scenario across **several passes**, not one. Evidence that has to
+   accumulate between crawls only misbehaves on the second and third pass.
+3. Land the scenario as a versioned test. A scratch script proves it once; a
+   test keeps proving it.
+4. Only then use `CARD_DATA_DRY_RUN=1` against real data, and only then a real
+   run.
+
+This is not ceremony. Wiring the SCR-010 absence policy looked finished and
+passed review by inspection, and the local pass caught two defects that would
+each have shipped a silent no-op:
+
+- `with_change_policy` refused the plain-mapping coverage that the policy
+  itself accepts, so every caller holding a mapping got an exception.
+- The writer strips `source_run` from the persisted snapshot on purpose, while
+  the policy validates `previous_snapshot` against the full contract, which
+  requires it. Every real call would have degraded to "policy skipped" — the
+  feature would have looked wired, logged nothing alarming, and done nothing.
+
+Both are invisible to unit tests of either side alone; both are obvious the
+moment two passes run against a local store.
 
 ## UFC Picks ecosystem
 
