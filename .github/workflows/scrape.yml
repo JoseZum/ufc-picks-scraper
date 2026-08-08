@@ -58,6 +58,33 @@ jobs:
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
+      # El ETL escribe resultados directo en Mongo, sin pasar por
+      # `PUT /admin/bouts/{id}/result`, que era el unico camino que disparaba el
+      # motor de misiones. Sin este paso los resultados entran y las misiones se
+      # quedan congeladas. El endpoint es idempotente por (bout, revision).
+      - name: Evaluate missions for the results just written
+        if: success()
+        run: |
+          set -o pipefail
+          code=$(curl -sS -o reconcile.json -w "%{http_code}" -X POST \
+            -H "X-Mission-Reconcile-Token: ${{ secrets.MISSION_RECONCILE_TOKEN }}" \
+            "${{ secrets.API_BASE_URL }}/admin/missions/evaluation/reconcile")
+          cat reconcile.json
+          echo
+          if [ "$code" != "200" ]; then
+            echo "Mission reconcile failed with HTTP $code"
+            exit 1
+          fi
+          # Un error por bout no rompe la pasada, pero no puede pasar en silencio.
+          python - <<'PY'
+          import json, sys
+          report = json.load(open("reconcile.json"))
+          print("missions reconciled:", json.dumps(report, indent=2)[:2000])
+          if report.get("errors"):
+              print("Mission evaluation reported errors")
+              sys.exit(1)
+          PY
+
   discover:
     name: ESPN General ETL
     runs-on: ubuntu-latest
