@@ -556,7 +556,10 @@ class EventImagesSpider(scrapy.Spider):
         self.requested_official_urls: set[str] = set()
 
     async def start(self):
-        query: dict = {"name": {"$regex": r"^UFC", "$options": "i"}}
+        # Sin anclar a `^`: "Noche UFC: Rodriguez vs. Silva" no empieza por UFC
+        # y quedaba fuera de la busqueda de imagenes para siempre, no por
+        # timing. Cualquier marca que no abra con "UFC" caia en el mismo hueco.
+        query: dict = {"name": {"$regex": r"UFC", "$options": "i"}}
         if self.target_event_id is not None:
             query = {"id": self.target_event_id}
 
