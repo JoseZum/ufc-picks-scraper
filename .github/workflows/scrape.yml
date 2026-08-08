@@ -54,7 +54,7 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl espn -a MODE=results 2>&1 | tee espn-results.log
-          ! grep -Eq "ESPN request failed|Canonical card (plan blocked|write failed)|spider_exceptions/count" espn-results.log
+          ! grep -Eq "ESPN request failed|Canonical card write failed|spider_exceptions/count" espn-results.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
@@ -75,7 +75,10 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl espn -a MODE=general -a DAYS_BACK=14 -a DAYS_AHEAD=60 2>&1 | tee espn-general.log
-          ! grep -Eq "ESPN request failed|Canonical card (plan blocked|write failed)|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-general.log
+          # `plan blocked` se omite a proposito: el ETL revisita cada evento
+          # conforme llegan los detalles y las pasadas intermedias se bloquean
+          # sin que eso sea un fallo. `write failed` es la no-convergencia real.
+          ! grep -Eq "ESPN request failed|Canonical card write failed|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-general.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
