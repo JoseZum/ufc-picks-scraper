@@ -8,6 +8,15 @@ on:
     # ETL general ESPN: 2 veces por semana (carteleras, perfiles, stats y fotos)
     - cron: "0 2 * * 1,4"
 
+    # Refresco diario de las carteleras proximas. Existe por la politica de
+    # ausencias: `AUTO_REMOVAL_REQUIRED_MISSES = 3` cuenta solo observaciones de
+    # cobertura `complete`, y esas solo las emite MODE=general (espn.py pide los
+    # detalles por competicion unicamente en ese modo). Con el cron de lunes y
+    # jueves caben como maximo 2 corridas en la ventana de
+    # `AUTO_REMOVAL_WINDOW_DAYS = 7`, asi que el umbral de 3 era inalcanzable y
+    # una pelea caida del card no se borraba nunca.
+    - cron: "0 5 * * *"
+
     # Posters de Wikipedia/origen + hero oficial UFC: diario
     - cron: "0 3 * * *"           # Sin cambios
 
@@ -25,6 +34,7 @@ on:
           - fighter_images
           - espn_results
           - espn_general
+          - espn_upcoming
           - espn_photos
           - event_images_season
         default: scheduled
@@ -106,6 +116,34 @@ jobs:
           # conforme llegan los detalles y las pasadas intermedias se bloquean
           # sin que eso sea un fallo. `write failed` es la no-convergencia real.
           ! grep -Eq "ESPN request failed|Canonical card write failed|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-general.log
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: us-east-1
+          IMAGE_SOURCE_MODE: s3
+
+  upcoming_cards:
+    name: ESPN Upcoming Cards Refresh
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 5 * * *') ||
+      github.event.inputs.mode == 'espn_upcoming'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      # Ventana corta a proposito: esto no reemplaza al ETL general, solo
+      # alimenta la politica de ausencias con una observacion `complete` diaria
+      # de las cards que estan dentro de los 7 dias previos al lock.
+      - name: Refresh cards locking within the absence-policy window
+        run: |
+          set -o pipefail
+          scrapy crawl espn -a MODE=general -a DAYS_BACK=1 -a DAYS_AHEAD=8 2>&1 | tee espn-upcoming.log
+          ! grep -Eq "ESPN request failed|Canonical card write failed|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-upcoming.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
