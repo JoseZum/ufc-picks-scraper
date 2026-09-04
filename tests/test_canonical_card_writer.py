@@ -776,6 +776,33 @@ class TestPrecedenceOrder:
 
 
 class TestTerminalBoutsAreRetained:
+    def test_an_explicit_espn_cancellation_retires_a_still_listed_bout(self):
+        store = new_store()
+        payload = espn_event("numbered_three_sections.json")
+        bout_id = int(payload["competitions"][1]["id"])
+        espn_pass(store, "numbered_three_sections.json")
+
+        def cancel_still_listed_bout(next_payload):
+            next_payload["competitions"][1]["status"] = {
+                "type": {
+                    "name": "STATUS_CANCELED",
+                    "state": "pre",
+                    "completed": False,
+                }
+            }
+
+        plan, receipt = espn_pass(
+            store,
+            "numbered_three_sections.json",
+            observed_at=T2,
+            mutate=cancel_still_listed_bout,
+        )
+
+        assert not plan.blocked and receipt.verified_converged
+        assert store.bouts[bout_id]["status"] == "cancelled"
+        slot = next(slot for slot in store.slots.values() if slot["bout_id"] == bout_id)
+        assert slot["is_current"] is False
+
     @pytest.mark.parametrize("status", ["cancelled", "postponed", "replaced"])
     def test_a_terminal_bout_keeps_its_document_and_lifecycle(self, status):
         store = new_store()
@@ -848,6 +875,44 @@ class TestTerminalBoutsAreRetained:
 
 
 class TestReplacementLineage:
+    def test_espn_opponent_swap_is_linked_and_retires_the_old_matchup(self):
+        """A shared ESPN athlete turns a disappearance into a replacement."""
+
+        store = new_store()
+        payload = espn_event("numbered_three_sections.json")
+        original = copy.deepcopy(payload["competitions"][2])
+        original_id = int(original["id"])
+        espn_pass(store, "numbered_three_sections.json")
+
+        replacement_id = 991299999
+
+        def replace_opponent(next_payload):
+            replacement = copy.deepcopy(original)
+            replacement["id"] = str(replacement_id)
+            replacement["competitors"][1]["id"] = "992299999"
+            replacement["competitors"][1]["athlete"] = {
+                "id": "992299999",
+                "displayName": "Fixture Late Replacement",
+            }
+            next_payload["competitions"][2] = replacement
+
+        plan, receipt = espn_pass(
+            store,
+            "numbered_three_sections.json",
+            observed_at=T2,
+            mutate=replace_opponent,
+        )
+
+        assert not plan.blocked and receipt.verified_converged
+        assert store.bouts[original_id]["status"] == "replaced"
+        assert store.bouts[original_id]["replaced_by_bout_id"] == replacement_id
+        original_slot = next(
+            slot for slot in store.slots.values() if slot["bout_id"] == original_id
+        )
+        assert original_slot["is_current"] is False
+        assert store.bouts[replacement_id]["replaces_bout_id"] == original_id
+        assert store.bouts[replacement_id]["matchup_revision"] == 2
+
     def test_a_fighter_replacement_creates_a_new_target_under_one_lineage(self):
         store = new_store()
         submit_card_observations(

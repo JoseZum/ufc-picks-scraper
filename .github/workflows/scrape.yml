@@ -10,11 +10,9 @@ on:
 
     # Refresco diario de las carteleras proximas. Existe por la politica de
     # ausencias: `AUTO_REMOVAL_REQUIRED_MISSES = 3` cuenta solo observaciones de
-    # cobertura `complete`, y esas solo las emite MODE=general (espn.py pide los
-    # detalles por competicion unicamente en ese modo). Con el cron de lunes y
-    # jueves caben como maximo 2 corridas en la ventana de
-    # `AUTO_REMOVAL_WINDOW_DAYS = 7`, asi que el umbral de 3 era inalcanzable y
-    # una pelea caida del card no se borraba nunca.
+    # cobertura `complete`. MODE=results tambien pide detalle por competencia y
+    # puede alcanzar el umbral durante fight week; esta pasada diaria mantiene
+    # una segunda via explicita para todas las carteleras proximas.
     - cron: "0 5 * * *"
 
     # Posters de Wikipedia/origen + hero oficial UFC: diario

@@ -147,6 +147,18 @@ def select_ufc_events(
     return events
 
 
+def mode_collects_competition_details(mode: str) -> bool:
+    """Whether a pass can certify that the full ESPN card was inspected.
+
+    Results runs happen every two hours and already revisit cards with pending
+    fights. Fetching the small competition documents there lets the absence
+    policy accumulate complete observations quickly enough for late fight-week
+    cancellations; athlete/profile enrichment remains exclusive to general.
+    """
+
+    return mode in {"general", "results"}
+
+
 class EspnSpider(scrapy.Spider):
     name = "espn"
     allowed_domains = [
@@ -778,7 +790,7 @@ class EspnSpider(scrapy.Spider):
                         self.requested_athletes.add(athlete_id)
                         yield self._athlete_request(athlete_id)
 
-            if self.mode == "general":
+            if mode_collects_competition_details(self.mode):
                 yield self._competition_request(
                     str(espn_event["id"]),
                     competition_id,

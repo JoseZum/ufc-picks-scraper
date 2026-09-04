@@ -231,6 +231,108 @@ def _canonical_bout_sidecar(document: Mapping[str, Any]) -> Mapping[str, Any]:
     return _mapping(document.get("card_data_v1"))
 
 
+def _competition_athlete_aliases(competition: Mapping[str, Any]) -> frozenset[str]:
+    aliases = set()
+    for competitor in sorted_competitors(dict(competition)):
+        athlete = _mapping(competitor.get("athlete"))
+        athlete_id = competitor.get("id") or athlete.get("id")
+        if athlete_id is not None and str(athlete_id).strip():
+            aliases.add(str(athlete_id))
+    return frozenset(aliases)
+
+
+def _persisted_athlete_aliases(document: Mapping[str, Any]) -> frozenset[str]:
+    aliases = {
+        str(alias)
+        for fighter in _sequence(_canonical_bout_sidecar(document).get("fighters"))
+        if isinstance(fighter, Mapping)
+        if (alias := _mapping(fighter.get("source_ids")).get("espn_athlete_id"))
+        is not None
+    }
+    if aliases:
+        return frozenset(aliases)
+    legacy = _mapping(document.get("fighters"))
+    return frozenset(
+        str(alias)
+        for corner in ("red", "blue")
+        if (alias := _mapping(legacy.get(corner)).get("espn_id")) is not None
+    )
+
+
+def _infer_espn_replacements(
+    competitions: Sequence[Mapping[str, Any]],
+    state: CanonicalCardState,
+    legacy_by_competition: Mapping[str, Mapping[str, Any]],
+) -> dict[str, int]:
+    """Link a unique opponent swap without waiting for absence confirmation.
+
+    ESPN assigns a new competition ID when one fighter stays on the card with
+    a replacement opponent. It does not expose an explicit ``replaces`` field,
+    but the shared ESPN athlete ID is stable. A one-to-one edge between one
+    absent current bout and one present competition is stronger than an
+    unexplained disappearance: it is an observed matchup replacement.
+
+    Ambiguous edges are deliberately ignored and fall back to the conservative
+    multi-pass absence policy.
+    """
+
+    present: dict[str, tuple[int, Mapping[str, Any] | None, frozenset[str]]] = {}
+    for competition in competitions:
+        competition_id = str(competition.get("id") or "")
+        if not competition_id:
+            continue
+        legacy_bout = legacy_by_competition.get(competition_id)
+        if legacy_bout is None and competition_id.isdigit():
+            legacy_bout = state.bout_by_id.get(int(competition_id))
+        if legacy_bout is None and not competition_id.isdigit():
+            continue
+        bout_id = (
+            int(legacy_bout["id"])
+            if legacy_bout is not None
+            else int(competition_id)
+        )
+        aliases = _competition_athlete_aliases(competition)
+        if len(aliases) == 2:
+            present[competition_id] = (bout_id, legacy_bout, aliases)
+
+    present_bout_ids = {item[0] for item in present.values()}
+    absent: dict[int, frozenset[str]] = {}
+    for bout_id, slot in state.slot_by_bout.items():
+        if slot.get("is_current") is not True or bout_id in present_bout_ids:
+            continue
+        document = state.bout_by_id.get(bout_id)
+        if document is None:
+            continue
+        status = _canonical_bout_sidecar(document).get("status") or document.get(
+            "status"
+        )
+        aliases = _persisted_athlete_aliases(document)
+        if status not in TERMINAL_BOUT_STATUSES and len(aliases) == 2:
+            absent[bout_id] = aliases
+
+    candidates_by_competition: dict[str, list[int]] = {}
+    competitions_by_absent: dict[int, list[str]] = {}
+    for competition_id, (_, document, aliases) in present.items():
+        canonical = _canonical_bout_sidecar(document or {})
+        if canonical.get("replaces_bout_id") is not None:
+            continue
+        candidates = [
+            bout_id
+            for bout_id, old_aliases in absent.items()
+            if len(aliases & old_aliases) == 1
+        ]
+        candidates_by_competition[competition_id] = candidates
+        for bout_id in candidates:
+            competitions_by_absent.setdefault(bout_id, []).append(competition_id)
+
+    return {
+        competition_id: candidates[0]
+        for competition_id, candidates in candidates_by_competition.items()
+        if len(candidates) == 1
+        and len(competitions_by_absent.get(candidates[0], ())) == 1
+    }
+
+
 def _persisted_fighter_id(
     legacy_bout: Optional[Mapping[str, Any]],
     corner: str,
@@ -463,6 +565,23 @@ def build_espn_card_observations(
         if alias_id is not None:
             legacy_by_competition[str(alias_id)] = document
 
+    inferred_replacements = _infer_espn_replacements(
+        competitions, state, legacy_by_competition
+    )
+    if inferred_replacements:
+        findings.append(
+            _finding(
+                "ESPN_MATCHUP_REPLACEMENT_INFERRED",
+                "info",
+                "bouts",
+                (
+                    f"{old_bout_id}->{competition_id}"
+                    for competition_id, old_bout_id in inferred_replacements.items()
+                ),
+                "A unique shared ESPN athlete links an absent matchup to its replacement.",
+            )
+        )
+
     total = len(competitions)
     observations: list[dict[str, Any]] = []
     section_starts: dict[str, str] = {}
@@ -522,9 +641,14 @@ def build_espn_card_observations(
         previous_status = canonical_previous.get("status") or (
             _mapping(legacy_bout).get("status") if legacy_bout is not None else None
         )
-        completed = bool(
-            _mapping(_mapping(competition.get("status")).get("type")).get("completed")
+        competition_status = _mapping(
+            _mapping(competition.get("status")).get("type")
         )
+        completed = bool(competition_status.get("completed"))
+        explicitly_cancelled = competition_status.get("name") in {
+            "STATUS_CANCELED",
+            "STATUS_CANCELLED",
+        }
         bout_values: dict[str, Any] = {
             "source_ids": {"espn_competition_id": competition_id},
             "fighters": [
@@ -532,6 +656,8 @@ def build_espn_card_observations(
                 for fighter in fighters
             ],
         }
+        if competition_id in inferred_replacements:
+            bout_values["replaces_bout_id"] = inferred_replacements[competition_id]
         weight_class = normalize_weight_class(
             detail.get("weight_class")
             or _mapping(competition.get("type")).get("text")
@@ -547,7 +673,9 @@ def build_espn_card_observations(
         rounds = detail.get("rounds_scheduled") or _scheduled_rounds(competition)
         if rounds in {3, 5}:
             bout_values["scheduled_rounds"] = rounds
-        if previous_status in TERMINAL_BOUT_STATUSES and not completed:
+        if explicitly_cancelled:
+            bout_values["status"] = "cancelled"
+        elif previous_status in TERMINAL_BOUT_STATUSES and not completed:
             # A terminal lifecycle is never revived by a refetch.
             relisted_terminal.append(bout_id)
         elif not completed:
@@ -578,7 +706,7 @@ def build_espn_card_observations(
         )
         start = utc_string(competition.get("date"))
         lock = utc_string(detail.get("automatic_lock_time_utc")) or start
-        if bout_id not in relisted_terminal:
+        if bout_id not in relisted_terminal and not explicitly_cancelled:
             slot_values: dict[str, Any] = {
                 "is_current": True,
                 "order_overall": total - index,

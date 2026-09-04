@@ -23,6 +23,7 @@ from tapology_scraper.spiders.espn import (
     event_has_all_results,
     event_is_near,
     has_fight_result,
+    mode_collects_competition_details,
     select_ufc_events,
 )
 
@@ -53,6 +54,11 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_results_pass_collects_details_for_absence_confirmation(self):
+        self.assertTrue(mode_collects_competition_details("results"))
+        self.assertTrue(mode_collects_competition_details("general"))
+        self.assertFalse(mode_collects_competition_details("photos"))
+
     def test_infers_three_card_sections_from_espn_start_groups(self):
         competitions = [
             {"id": "early-1", "date": "2026-08-15T21:00Z"},
