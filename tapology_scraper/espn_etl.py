@@ -316,19 +316,48 @@ def map_competitors_to_corners(
     return {"red": competitors[0], "blue": competitors[1]}
 
 
+def result_detail_texts(detail_texts: list[str]) -> list[str]:
+    """Keep result declarations, never play-by-play actions such as attempts.
+
+    ESPN mixes `Unofficial Winner Decision` and `Submission Attempt` in the
+    same list. Searching that whole list classified decisions as submissions.
+    Only complete result labels are evidence of the ending method.
+    """
+    labels = {
+        "kotko", "ko/tko", "ko", "tko", "knockout", "technical knockout",
+        "submission", "sub", "decision", "dec", "unanimous decision",
+        "split decision", "majority decision", "technical decision",
+        "no contest", "nc", "draw", "majority draw", "split draw",
+        "unanimous draw", "technical draw", "dq", "disqualification",
+        "disqualified",
+    }
+    return [text for text in detail_texts if re.sub(
+        r"^(?:(?:unofficial|official)\s+)?winner\s+(?:by\s+)?", "",
+        " ".join(str(text).lower().split()),
+    ) in labels]
+
+
 def normalize_result_method(detail_texts: list[str]) -> tuple[str, str | None]:
-    combined = " ".join(detail_texts).lower()
-    if "kotko" in combined or "ko/tko" in combined or "knockout" in combined:
-        return "KO/TKO", "KO/TKO"
-    if "submission" in combined:
-        return "SUB", "Submission"
-    if "decision" in combined:
-        return "DEC", "Decision"
-    if "no contest" in combined:
-        return "NC", "No Contest"
-    if "draw" in combined:
-        return "DEC", "Draw"
-    return "OTHER", None
+    results = set()
+    for text in result_detail_texts(detail_texts):
+        value = re.sub(
+            r"^(?:(?:unofficial|official)\s+)?winner\s+(?:by\s+)?", "",
+            " ".join(text.lower().split()),
+        )
+        if "no contest" in value or value == "nc":
+            results.add(("NC", "No Contest"))
+        elif "draw" in value:
+            results.add(("DEC", "Draw"))
+        elif "decision" in value or value == "dec":
+            results.add(("DEC", "Decision"))
+        elif "submission" in value or value == "sub":
+            results.add(("SUB", "Submission"))
+        elif "disqual" in value or value == "dq":
+            results.add(("DQ", "Disqualification"))
+        else:
+            results.add(("KO/TKO", "KO/TKO"))
+    # Conflicting declarations must wait for a coherent source update.
+    return next(iter(results)) if len(results) == 1 else ("OTHER", None)
 
 
 def transform_result(
@@ -344,8 +373,9 @@ def transform_result(
         str((detail.get("type") or {}).get("text") or "")
         for detail in competition.get("details") or []
     ]
-    combined = " ".join(detail_texts).lower()
     method, method_detail = normalize_result_method(detail_texts)
+    if method == "OTHER":
+        return None
 
     winner_corner = None
     winner_name = None
@@ -358,7 +388,7 @@ def transform_result(
 
     if winner_corner:
         outcome = winner_corner
-    elif "no contest" in combined:
+    elif method == "NC":
         outcome = "nc"
     else:
         outcome = "draw"

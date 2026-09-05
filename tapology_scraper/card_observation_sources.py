@@ -40,7 +40,9 @@ from tapology_scraper.espn_etl import (
     map_competitors_to_corners,
     name_similarity,
     normalize_weight_class,
+    normalize_result_method,
     parse_espn_datetime,
+    result_detail_texts,
     sorted_competitors,
 )
 
@@ -433,7 +435,10 @@ def _espn_result_values(
         for detail in _sequence(competition.get("details"))
         if isinstance(detail, Mapping)
     ]
-    combined = " ".join(detail_texts).lower()
+    detail_texts = result_detail_texts(detail_texts)
+    method, _ = normalize_result_method(detail_texts)
+    if method == "OTHER":
+        return None
     winner_corner = None
     for fighter in fighters:
         corner = fighter.get("corner")
@@ -444,7 +449,7 @@ def _espn_result_values(
         outcome = "red_win"
     elif winner_corner == "blue":
         outcome = "blue_win"
-    elif "no contest" in combined:
+    elif method == "NC":
         outcome = "no_contest"
     else:
         outcome = "draw"
@@ -456,7 +461,10 @@ def _espn_result_values(
         ),
         None,
     )
-    family = _method_family(detail_texts)
+    family = {
+        "KO/TKO": "ko_tko", "SUB": "submission", "DEC": "decision",
+        "DQ": "dq", "NC": "other",
+    }[method]
     period = status.get("period")
     return {
         "outcome": outcome,

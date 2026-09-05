@@ -1376,6 +1376,9 @@ class TestReplayRetryAndCorrection:
                     competition["status"] = {
                         "type": {"completed": True, "state": "post", "name": "STATUS_FINAL"}
                     }
+                    competition["details"] = [
+                        {"type": {"text": "Unofficial Winner Decision"}}
+                    ]
                     break
             return mutate
 
