@@ -1,18 +1,11 @@
-"""ESPN UFC ETL spider.
+"""ETL de UFC desde ESPN.
 
-Modes:
+Modos: `general` (carteleras, perfiles, récords, fotos y resultados),
+`results` (solo rellena resultados que faltan) y `photos` (enlaza peleadores y
+refresca headshots de las carteleras próximas).
 
-* ``general``: cards + fighter profiles + records + S3 headshots + results.
-* ``results``: only fill missing results on existing UFC Picks cards.
-* ``photos``: link fighters and refresh missing ESPN headshots for upcoming cards.
-
-Examples:
-    scrapy crawl espn -a MODE=general
+    scrapy crawl espn -a MODE=general [-a EVENT_ID=] [-a SEASON=]
     scrapy crawl espn -a MODE=results -a DAYS_BACK=14
-    scrapy crawl espn -a MODE=photos -a DAYS_AHEAD=60
-    scrapy crawl espn -a MODE=general -a EVENT_ID=600059339
-    scrapy crawl espn -a MODE=general -a SEASON=2026
-    scrapy crawl espn -a MODE=general -a SEASON=2026 -a ONLY_COMPLETED=true
 """
 
 from __future__ import annotations

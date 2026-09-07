@@ -1,17 +1,11 @@
-"""Resolve the two event images used by UFC Picks.
+"""Resuelve las dos imágenes del evento. Solo guarda URLs, nunca bytes.
 
-This spider intentionally does not download or persist image bytes:
+`poster_image_url` es el poster vertical: sale de la página de Wikipedia del
+evento, prefiriendo la fuente original acreditada y dejando el archivo de
+Wikipedia como fallback. `hero_image_url` es la apaisada de la página oficial
+de UFC, tomada del `background_image_xl_2x`.
 
-* ``poster_image_url`` is the vertical card poster.  It is discovered through
-  the event's Wikipedia file page.  The original ``Source``/``Credit`` page is
-  preferred (for example an X post whose ``og:image`` points at pbs.twimg.com);
-  Wikipedia's own low-resolution file is retained as a safe fallback.
-* ``hero_image_url`` is the wide, high-resolution art used by landing/detail
-  heroes.  It comes from the official UFC event page and specifically prefers
-  the ``background_image_xl_2x`` source from the page's ``<picture>`` element.
-
-Only URL metadata is written to MongoDB.  Existing event, bout, and pick data
-is never reconciled or deleted by this spider.
+Este spider no reconcilia ni borra eventos, peleas ni picks.
 """
 
 from __future__ import annotations

@@ -1,13 +1,9 @@
-"""Legacy Tapology fighter-headshot refresh.
+"""Refresco legacy de headshots desde Tapology.
 
-Event posters are intentionally out of scope: ``event_images`` owns them and
-resolves them through Wikipedia's credited source.  Keeping that ownership
-boundary prevents a manual legacy run from restoring Tapology poster URLs.
+Los posters quedan fuera a propósito: son de `event_images`. Si este spider
+los tocara, una corrida manual devolvería las URLs viejas de Tapology.
 
-Usage:
-    scrapy crawl ufc_images
-    scrapy crawl ufc_images -a MODE=bouts
-    scrapy crawl ufc_images -a EVENT_ID=135755
+    scrapy crawl ufc_images [-a MODE=bouts] [-a EVENT_ID=]
 """
 
 import os

@@ -1,13 +1,7 @@
-"""
-Spider de Backfill de Detalles de Peleadores
+"""Rellena los datos del peleador (altura, alcance, edad, país, récord) desde
+su perfil de Tapology.
 
-Este spider visita los perfiles de peleadores en Tapology para obtener
-información detallada como altura, alcance, edad, nacionalidad, récord, etc.
-
-Usage:
-    scrapy crawl ufc_fighters                      # Todos los peleadores con datos faltantes
-    scrapy crawl ufc_fighters -a EVENT_ID=135755   # Solo un evento específico
-    scrapy crawl ufc_fighters -a LIMIT=100         # Limitar cantidad de peleadores
+    scrapy crawl ufc_fighters [-a EVENT_ID=] [-a LIMIT=]
 """
 
 import os
