@@ -68,8 +68,8 @@ def admin_observations(
 ) -> tuple[list[Any], list[str]]:
     """Convert standing commands into observations.
 
-    A command that no longer makes sense — it names a bout the card dropped, or
-    carries values the contract rejects — is skipped and reported rather than
+    A command that no longer makes sense, it names a bout the card dropped, or
+    carries values the contract rejects, is skipped and reported rather than
     failing the whole pass. One stale override must not stop a card from
     reconciling.
     """

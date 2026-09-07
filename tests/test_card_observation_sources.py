@@ -2,7 +2,7 @@
 
 :mod:`tapology_scraper.card_observation_sources` is the only place ESPN
 payloads and Admin commands become CardData proposals.  It must stay pure and
-must never decide precedence itself — it only assigns the source rank the
+must never decide precedence itself, it only assigns the source rank the
 normalizer then resolves.
 
 The identity rules proven here are the ones that cannot be expressed as field

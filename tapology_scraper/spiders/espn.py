@@ -322,8 +322,8 @@ class EspnSpider(scrapy.Spider):
 
         SCR-015 removed the direct lifecycle write this used to perform.
         ``events.status`` and ``bouts.status`` are canonical fields now, so a
-        lagging card is repaired by refetching its ESPN payload — the observed
-        status flows through the boundary with evidence — and never by
+        lagging card is repaired by refetching its ESPN payload, the observed
+        status flows through the boundary with evidence, and never by
         inferring completion or cancellation from local document counts.
         """
 

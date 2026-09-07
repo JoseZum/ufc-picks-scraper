@@ -16,7 +16,7 @@ The invariants proven, in the order the boundary must guarantee them:
   (:class:`TestTerminalBoutsAreRetained`);
 * replacement lineage and ``matchup_revision`` behave as contracted
   (:class:`TestReplacementLineage`);
-* an immediate replay is a zero-diff — the B-008 proof
+* an immediate replay is a zero-diff, the B-008 proof
   (:class:`TestConvergence`);
 * the legacy ``fighters``/``result`` compatibility fields still populate
   (:class:`TestLegacyCompatibilityProjection`).

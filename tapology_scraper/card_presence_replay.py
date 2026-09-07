@@ -8,8 +8,7 @@ ran, and a bout whose matchup changed stayed on the card forever.
 
 Two things were missing, and both live here:
 
-1. The policy is replay-safe *because* it accumulates evidence across runs —
-   three complete ESPN-detail payloads, at least 30 minutes apart.  That
+1. The policy is replay-safe *because* it accumulates evidence across runs, three complete ESPN-detail payloads, at least 30 minutes apart.  That
    evidence has to survive between crawls, and nothing persisted it.
 2. The policy only normalises its removal observations in memory.  Whoever
    persists has to hand them to the canonical writer, or the confirmed removal

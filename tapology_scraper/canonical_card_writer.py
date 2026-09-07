@@ -1,7 +1,7 @@
 """SCR-015/016 continuous CardData write boundary.
 
-Every ongoing CardData mutation — continuous ESPN observations and Admin
-date/timing/lifecycle/title/result commands — must enter through this module.
+Every ongoing CardData mutation, continuous ESPN observations and Admin
+date/timing/lifecycle/title/result commands, must enter through this module.
 The boundary owns three responsibilities and nothing else:
 
 * rebuild the previous canonical snapshot from persisted sidecars;
@@ -461,7 +461,7 @@ def persistable_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     Keeping it out of storage is what makes an immediate replay a true
     zero-diff: the same observations against the committed state resolve to a
     byte-identical envelope even though the second run has a different
-    ``previous_snapshot_revision``.  Per-field provenance is unaffected — it
+    ``previous_snapshot_revision``.  Per-field provenance is unaffected, it
     lives in the persisted ``evidence`` maps.
     """
 
@@ -586,8 +586,8 @@ def stabilize_snapshot_provenance(
     observation merely re-confirmed.  Because no revision advances for a
     re-confirmation, that churn makes every subsequent continuous pass look
     like an unversioned content change.  This is the boundary's storage
-    concern — the same reason :func:`persistable_snapshot` drops run
-    provenance — so it is resolved here, before planning any write.
+    concern, the same reason :func:`persistable_snapshot` drops run
+    provenance, so it is resolved here, before planning any write.
     """
 
     stabilized = copy.deepcopy(dict(snapshot))

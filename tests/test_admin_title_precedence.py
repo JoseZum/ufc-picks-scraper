@@ -289,7 +289,7 @@ def test_a_structure_override_is_rejected_rather_than_silently_applied():
 
     ESPN emits `card_section` as a fact, not an advisory signal, so an Admin
     override contradicts it on every pass. The plan comes back unsafe with
-    quarantines and the replay never converges — which is the boundary refusing
+    quarantines and the replay never converges, which is the boundary refusing
     to leave two authorities disagreeing, and is the correct behaviour. It is
     also why enabling this channel needs a convergence decision first.
     """
@@ -319,7 +319,7 @@ def test_a_structure_override_is_rejected_rather_than_silently_applied():
 def test_a_withdrawn_command_stops_being_replayed():
     """Withdrawal removes the override from the observation set.
 
-    It does not undo an effect the boundary has already made terminal — a
+    It does not undo an effect the boundary has already made terminal, a
     cancelled bout is never revived by a later pass, which is a separate
     invariant the writer holds on its own.
     """
@@ -361,7 +361,7 @@ def test_a_malformed_command_is_skipped_without_stopping_the_card():
 
 
 def test_an_admin_result_stays_authoritative_across_repeated_passes():
-    """The result channel converges, unlike structure — so it IS wired."""
+    """The result channel converges, unlike structure, so it IS wired."""
     store = InMemoryCanonicalCardStore(
         events=[{"id": EVENT_ID, "name": "Seed event", "source": "tapology"}]
     )
