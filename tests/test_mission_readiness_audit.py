@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tapology_scraper.mission_readiness_audit import (
+from tapology_scraper.audits.mission_readiness_audit import (
     AUDIT_SCHEMA_VERSION,
     EXIT_FINDINGS,
     EXIT_INPUT_ERROR,
@@ -370,7 +370,7 @@ def test_cli_rejects_invalid_json_and_protects_input_paths(tmp_path):
 
 
 def test_audit_module_has_no_database_network_or_scraper_dependency():
-    import tapology_scraper.mission_readiness_audit as audit_module
+    import tapology_scraper.audits.mission_readiness_audit as audit_module
 
     source = Path(audit_module.__file__).read_text(encoding="utf-8").lower()
     forbidden_imports = (

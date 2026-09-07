@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from cryptography.fernet import Fernet
 
-from tapology_scraper.admin_title_attestation import parse_admin_title_attestation
-from tapology_scraper.production_backfill_package import (
+from tapology_scraper.audits.admin_title_attestation import parse_admin_title_attestation
+from tapology_scraper.audits.production_backfill_package import (
     AUTHORIZATION_SCHEMA_VERSION,
     EXIT_CONFIGURATION_ERROR,
     EXIT_PREPARED,
@@ -28,7 +28,7 @@ from tapology_scraper.production_backfill_package import (
     require_private_path,
     write_encrypted_preimages,
 )
-from tapology_scraper.production_card_audit import LegacyCardDocuments
+from tapology_scraper.audits.production_card_audit import LegacyCardDocuments
 
 PRIVATE_FIGHTER_MARKER = "PRIVATE FIGHTER NAME MUST NEVER APPEAR"
 CREATED_AT = "2026-08-01T12:00:00Z"
@@ -578,7 +578,7 @@ def test_package_rejects_partial_or_extra_event_scope():
 
 
 def test_cli_prepares_only_encrypted_and_sanitized_outputs(monkeypatch, tmp_path):
-    import tapology_scraper.production_backfill_package as module
+    import tapology_scraper.audits.production_backfill_package as module
 
     cards = build_cards()
     run = prepared_run(cards)
@@ -639,7 +639,7 @@ def test_cli_prepares_only_encrypted_and_sanitized_outputs(monkeypatch, tmp_path
 
 
 def test_cli_refuses_existing_outputs_before_reading_production(monkeypatch, tmp_path):
-    import tapology_scraper.production_backfill_package as module
+    import tapology_scraper.audits.production_backfill_package as module
 
     env_file = tmp_path / ".env"
     env_file.write_text("MONGODB_URI=mongodb://not-used", encoding="utf-8")
@@ -685,7 +685,7 @@ def test_cli_refuses_existing_outputs_before_reading_production(monkeypatch, tmp
 
 
 def test_source_cli_has_no_production_execute_switch_and_scope_is_fixed():
-    import tapology_scraper.production_backfill_package as module
+    import tapology_scraper.audits.production_backfill_package as module
 
     source = Path(module.__file__).read_text(encoding="utf-8")
 

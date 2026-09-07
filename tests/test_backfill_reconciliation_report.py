@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tapology_scraper.admin_title_attestation import parse_admin_title_attestation
-from tapology_scraper.backfill_reconciliation_report import (
+from tapology_scraper.audits.admin_title_attestation import parse_admin_title_attestation
+from tapology_scraper.audits.backfill_reconciliation_report import (
     BACKFILL_BOUT_PROJECTION,
     BACKFILL_EVENT_PROJECTION,
     BACKFILL_SLOT_PROJECTION,
@@ -23,7 +23,7 @@ from tapology_scraper.backfill_reconciliation_report import (
     render_json,
     render_markdown,
 )
-from tapology_scraper.production_card_audit import (
+from tapology_scraper.audits.production_card_audit import (
     GOLDEN_CARD_SPECS,
     GoldenCardSpec,
     LegacyCardDocuments,
@@ -469,7 +469,7 @@ def test_fetcher_rejects_any_event_outside_the_q014_allowlist():
 
 
 def test_successful_cli_writes_only_the_explicit_report(monkeypatch, tmp_path):
-    import tapology_scraper.backfill_reconciliation_report as report_module
+    import tapology_scraper.audits.backfill_reconciliation_report as report_module
 
     report = build_backfill_dry_run([build_clean_card()])
     monkeypatch.setattr(
@@ -496,7 +496,7 @@ def test_successful_cli_writes_only_the_explicit_report(monkeypatch, tmp_path):
 
 
 def test_cli_returns_blocked_exit_for_completed_dry_run(monkeypatch):
-    import tapology_scraper.backfill_reconciliation_report as report_module
+    import tapology_scraper.audits.backfill_reconciliation_report as report_module
 
     card = build_clean_card()
     blocked = build_backfill_dry_run(
@@ -517,7 +517,7 @@ def test_cli_returns_blocked_exit_for_completed_dry_run(monkeypatch):
 
 
 def test_cli_driver_error_is_redacted(monkeypatch):
-    import tapology_scraper.backfill_reconciliation_report as report_module
+    import tapology_scraper.audits.backfill_reconciliation_report as report_module
 
     secret = "mongodb+srv://user:secret@example.invalid/"
     monkeypatch.setattr(
@@ -560,7 +560,7 @@ def test_cli_loads_attestation_but_keeps_write_authorization_false(
     monkeypatch,
     tmp_path,
 ):
-    import tapology_scraper.backfill_reconciliation_report as report_module
+    import tapology_scraper.audits.backfill_reconciliation_report as report_module
 
     card = build_clean_card()
     attestation = build_title_attestation(card)
@@ -627,7 +627,7 @@ def test_report_cannot_overwrite_attestation_input(tmp_path):
 
 
 def test_source_has_no_database_mutation_methods_or_out_of_scope_collections():
-    import tapology_scraper.backfill_reconciliation_report as report_module
+    import tapology_scraper.audits.backfill_reconciliation_report as report_module
 
     source = Path(report_module.__file__).read_text(encoding="utf-8")
     forbidden = (

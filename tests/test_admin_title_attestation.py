@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tapology_scraper.admin_title_attestation import (
+from tapology_scraper.audits.admin_title_attestation import (
     AdminTitleAttestationError,
     load_admin_title_attestation,
     parse_admin_title_attestation,
@@ -126,7 +126,7 @@ def test_loader_reports_sanitized_file_errors(tmp_path):
 
 
 def test_source_has_no_database_network_or_write_dependencies():
-    import tapology_scraper.admin_title_attestation as module
+    import tapology_scraper.audits.admin_title_attestation as module
 
     source = Path(module.__file__).read_text(encoding="utf-8").lower()
     forbidden = (

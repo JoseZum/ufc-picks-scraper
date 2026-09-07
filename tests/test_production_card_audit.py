@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tapology_scraper.production_card_audit import (
+from tapology_scraper.audits.production_card_audit import (
     AUDITED_COLLECTIONS,
     BOUT_PROJECTION,
     EVENT_PROJECTION,
@@ -468,7 +468,7 @@ def test_settings_load_from_environment_without_exposing_values(monkeypatch):
 
 
 def test_missing_settings_and_driver_failures_have_sanitized_cli_errors(monkeypatch):
-    import tapology_scraper.production_card_audit as audit_module
+    import tapology_scraper.audits.production_card_audit as audit_module
 
     monkeypatch.delenv("MONGODB_URI", raising=False)
     missing_stderr = io.StringIO()
@@ -492,7 +492,7 @@ def test_missing_settings_and_driver_failures_have_sanitized_cli_errors(monkeypa
 
 
 def test_successful_cli_writes_only_requested_sanitized_report(monkeypatch, tmp_path):
-    import tapology_scraper.production_card_audit as audit_module
+    import tapology_scraper.audits.production_card_audit as audit_module
 
     report = audit_legacy_cards([build_clean_scheduled_card()])
     monkeypatch.setattr(
@@ -536,7 +536,7 @@ def test_env_file_cannot_be_overwritten_by_report(tmp_path):
 
 
 def test_source_contains_no_write_methods_or_out_of_scope_collections():
-    import tapology_scraper.production_card_audit as audit_module
+    import tapology_scraper.audits.production_card_audit as audit_module
 
     source = Path(audit_module.__file__).read_text(encoding="utf-8")
     forbidden = (

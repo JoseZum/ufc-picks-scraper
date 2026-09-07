@@ -119,15 +119,15 @@ starting Scrapy or connecting to MongoDB:
 
 ```bash
 # Deterministic JSON to stdout; contract validity is the default gate
-python -m tapology_scraper.mission_readiness_audit snapshot.json
+python -m tapology_scraper.audits.mission_readiness_audit snapshot.json
 
 # Human-readable report and an explicit capability gate
-python -m tapology_scraper.mission_readiness_audit snapshot.json \
+python -m tapology_scraper.audits.mission_readiness_audit snapshot.json \
   --format markdown \
   --require EVT,EVT_DATE,BOUT,ELIG,STRUCT
 
 # Writing a report requires an explicit output path
-python -m tapology_scraper.mission_readiness_audit snapshots/ \
+python -m tapology_scraper.audits.mission_readiness_audit snapshots/ \
   --format markdown \
   --output artifacts/mission-readiness.md
 ```
@@ -164,7 +164,7 @@ MONGODB_DB_NAME=ufc_picks
 Then generate the sanitized review artifact explicitly:
 
 ```bash
-python -m tapology_scraper.production_card_audit \
+python -m tapology_scraper.audits.production_card_audit \
   --env-file .env \
   --format markdown \
   --output ../mission-planning/GOLDEN_PRODUCTION_CARD_AUDIT.md
@@ -181,7 +181,7 @@ Validate that every candidate CardData mutation file in the scraper/backend
 workspace is classified and that the SCR-007 evidence anchors still exist:
 
 ```bash
-python -m tapology_scraper.writer_precedence_inventory \
+python -m tapology_scraper.audits.writer_precedence_inventory \
   --workspace-root .. \
   --check
 ```
@@ -189,7 +189,7 @@ python -m tapology_scraper.writer_precedence_inventory \
 Regenerate the deterministic handoff report explicitly:
 
 ```bash
-python -m tapology_scraper.writer_precedence_inventory \
+python -m tapology_scraper.audits.writer_precedence_inventory \
   --workspace-root .. \
   --output ../mission-planning/WRITER_PRECEDENCE_DISCREPANCY_REPORT.md
 ```
@@ -298,7 +298,7 @@ SCR-011/SCR-012A project the four Q-014/Q-018 production cards through the canon
 normalizer and slot reconciler without applying any operation:
 
 ```bash
-python -m tapology_scraper.backfill_reconciliation_report \
+python -m tapology_scraper.audits.backfill_reconciliation_report \
   --env-file .env \
   --admin-title-attestation ../mission-planning/SCR-012_ADMIN_TITLE_ATTESTATION.json \
   --event-id 136871 \
@@ -331,7 +331,7 @@ SCR-012B prepares the exact three-event execution package and encrypted
 recoverable preimages without exposing a production-write command:
 
 ```bash
-python -m tapology_scraper.production_backfill_package \
+python -m tapology_scraper.audits.production_backfill_package \
   --env-file .env \
   --admin-title-attestation ../mission-planning/SCR-012_ADMIN_TITLE_ATTESTATION.json \
   --preimage-key-file <absolute-private-path>/preimage-key.fernet \

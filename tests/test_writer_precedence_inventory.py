@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tapology_scraper.writer_precedence_inventory import (
+from tapology_scraper.audits.writer_precedence_inventory import (
     BOUNDARY_OWNED_FIELDS,
     BOUNDARY_SCANNED_FILES,
     CAPABILITIES,
@@ -295,7 +295,7 @@ def test_cli_check_and_render_to_explicit_output(tmp_path):
 
 
 def test_inventory_module_has_no_database_network_or_mutation_boundary():
-    import tapology_scraper.writer_precedence_inventory as inventory_module
+    import tapology_scraper.audits.writer_precedence_inventory as inventory_module
 
     source = Path(inventory_module.__file__).read_text(encoding="utf-8")
     forbidden_imports = (

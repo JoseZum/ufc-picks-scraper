@@ -262,7 +262,7 @@ MUTATION_FILES = (
         ),
     ),
     MutationFile(
-        "ufc-picks-scraper/tapology_scraper/production_backfill_package.py",
+        "ufc-picks-scraper/tapology_scraper/audits/production_backfill_package.py",
         "migration_orchestrator",
         "Exact-run CardData sidecar/slot backfill with transaction and drift guards.",
     ),
@@ -444,7 +444,7 @@ WRITER_PATHS = (
         "Guarded CardData V1 production backfill",
         "scraper",
         "admin_attested_canonical_projection",
-        ("ufc-picks-scraper/tapology_scraper/production_backfill_package.py",),
+        ("ufc-picks-scraper/tapology_scraper/audits/production_backfill_package.py",),
         (
             "prepare_backfill_run",
             "MongoCardDataBackfillAdapter.execute",
