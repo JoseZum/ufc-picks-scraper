@@ -1,0 +1,50 @@
+# Validacion del scraper. Solo corre checks, nunca escribe en el repo ni en Mongo.
+name: Scraper CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'tapology_scraper/**'
+      - 'tests/**'
+      - 'ingest.py'
+      - 'dry_run_compare.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/scraper-ci.yml'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: scraper-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest ruff
+
+      - name: Linting (Ruff)
+        run: ruff check . --output-format=github
+
+      - name: Tests
+        run: pytest -q
