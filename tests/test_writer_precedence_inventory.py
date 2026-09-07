@@ -2,6 +2,8 @@ import ast
 import io
 from pathlib import Path
 
+import pytest
+
 from tapology_scraper.writer_precedence_inventory import (
     BOUNDARY_OWNED_FIELDS,
     BOUNDARY_SCANNED_FILES,
@@ -27,6 +29,13 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_WRITER = "ufc-picks-scraper/tapology_scraper/canonical_card_writer.py"
 ESPN_SPIDER = "ufc-picks-scraper/tapology_scraper/spiders/espn.py"
 
+# El inventario cruza los dos repos. En un checkout de solo el scraper (CI)
+# no hay backend que escanear, asi que esos casos se saltan.
+requires_workspace = pytest.mark.skipif(
+    not (WORKSPACE_ROOT / "ufc-picks-backend" / "app").is_dir(),
+    reason="requiere el workspace completo con ufc-picks-backend",
+)
+
 
 def scan_source(source: str, path: str = ESPN_SPIDER):
     visitor = _CanonicalWriteVisitor(path)
@@ -34,12 +43,14 @@ def scan_source(source: str, path: str = ESPN_SPIDER):
     return visitor.sites
 
 
+@requires_workspace
 def test_every_candidate_mutation_file_is_explicitly_classified():
     expected = tuple(sorted(item.path for item in MUTATION_FILES))
 
     assert scan_candidate_mutation_files(WORKSPACE_ROOT) == expected
 
 
+@requires_workspace
 def test_inventory_source_files_and_evidence_are_current():
     assert validate_inventory(WORKSPACE_ROOT) == ()
 
@@ -104,6 +115,7 @@ def test_critical_discrepancies_cover_identity_structure_cancellation_and_eligib
     assert critical["WP-010"] == {"ELIG"}
 
 
+@requires_workspace
 def test_title_contract_makes_admin_true_and_false_durable_and_exclusive():
     title_gap = next(
         item for item in DISCREPANCIES if item.discrepancy_id == "WP-007"
@@ -129,6 +141,7 @@ def test_boundary_owned_fields_match_the_canonical_writer_declaration():
         assert set(BOUNDARY_OWNED_FIELDS[collection]) == set(fields)
 
 
+@requires_workspace
 def test_every_canonical_collection_write_is_declared_and_non_canonical():
     assert validate_canonical_write_surface(WORKSPACE_ROOT) == ()
 
@@ -145,6 +158,7 @@ def test_every_canonical_collection_write_is_declared_and_non_canonical():
         assert not set(roots) & set(BOUNDARY_OWNED_FIELDS[key[2]])
 
 
+@requires_workspace
 def test_only_the_duplicate_cleanup_may_delete_and_the_boundary_never_does():
     deletes = {
         key[1]
@@ -207,6 +221,7 @@ def test_auxiliary_dotted_and_fstring_writes_are_not_treated_as_canonical():
     assert not set(roots) & set(BOUNDARY_OWNED_FIELDS["bouts"])
 
 
+@requires_workspace
 def test_observation_adapters_stay_pure():
     for path in PURE_OBSERVATION_MODULES:
         source = (WORKSPACE_ROOT / path).read_text(encoding="utf-8")
@@ -215,6 +230,7 @@ def test_observation_adapters_stay_pure():
         assert ".insert_one(" not in source
 
 
+@requires_workspace
 def test_required_v1_fields_are_absent_from_current_core_writers():
     combined = "\n".join(
         (WORKSPACE_ROOT / path).read_text(encoding="utf-8")
@@ -224,6 +240,7 @@ def test_required_v1_fields_are_absent_from_current_core_writers():
     assert not [field for field in CURRENTLY_UNWRITTEN_V1_FIELDS if field in combined]
 
 
+@requires_workspace
 def test_the_v1_fields_moved_to_the_boundary_rather_than_vanishing():
     """Legacy writers stay out of V1 fields *because* the boundary owns them."""
 
@@ -234,6 +251,7 @@ def test_the_v1_fields_moved_to_the_boundary_rather_than_vanishing():
     ]
 
 
+@requires_workspace
 def test_report_is_deterministic_and_contains_scr008_handoff():
     first = render_markdown(WORKSPACE_ROOT)
     second = render_markdown(WORKSPACE_ROOT)
@@ -248,6 +266,7 @@ def test_report_is_deterministic_and_contains_scr008_handoff():
     assert "mongodb+srv://" not in first
 
 
+@requires_workspace
 def test_cli_check_and_render_to_explicit_output(tmp_path):
     check_stdout = io.StringIO()
     check_stderr = io.StringIO()

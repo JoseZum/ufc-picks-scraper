@@ -310,9 +310,22 @@ MUTATION_FILES = (
         "Dormant generic event/slot create/update/delete capability without provenance.",
     ),
     MutationFile(
+        "ufc-picks-backend/app/modules/missions/admin_router.py",
+        "non_card_mutation",
+        "Admin HTTP boundary for monthly missions; writes only `mission_admin_audit`.",
+    ),
+    MutationFile(
         "ufc-picks-backend/app/modules/missions/application/bout_evaluation.py",
         "non_card_mutation",
         "Reads canonical bout results but mutates only mission assignments and runs.",
+    ),
+    MutationFile(
+        "ufc-picks-backend/app/modules/missions/application/result_reconciliation.py",
+        "non_card_mutation",
+        (
+            "Sweeps canonical results that never reached the mission trigger and "
+            "mutates only its own watermark before delegating to `on_bout_result`."
+        ),
     ),
     MutationFile(
         "ufc-picks-backend/app/modules/missions/application/card_control.py",
