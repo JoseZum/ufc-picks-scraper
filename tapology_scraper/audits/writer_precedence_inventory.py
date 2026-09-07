@@ -295,9 +295,29 @@ MUTATION_FILES = (
         "Legacy embedded fighter image updater.",
     ),
     MutationFile(
-        "ufc-picks-backend/app/controllers/admin_controller.py",
+        "ufc-picks-backend/app/controllers/admin/bouts.py",
         "core_card_writer",
-        "Active Admin timing/result/lifecycle/title/slot mutation endpoints.",
+        "Admin cancellation, deletion and card-position edits.",
+    ),
+    MutationFile(
+        "ufc-picks-backend/app/controllers/admin/locks.py",
+        "core_card_writer",
+        "Admin pick locks and event completion.",
+    ),
+    MutationFile(
+        "ufc-picks-backend/app/controllers/admin/media.py",
+        "core_card_writer",
+        "Admin event art and fighter photo endpoints.",
+    ),
+    MutationFile(
+        "ufc-picks-backend/app/controllers/admin/results.py",
+        "core_card_writer",
+        "Admin result registration and deletion.",
+    ),
+    MutationFile(
+        "ufc-picks-backend/app/controllers/admin/timing.py",
+        "core_card_writer",
+        "Admin event and bout timing endpoints.",
     ),
     MutationFile(
         "ufc-picks-backend/app/repositories/bout_repository.py",
@@ -643,7 +663,7 @@ WRITER_PATHS = (
         "Admin event/bout timing",
         "backend",
         "admin_override",
-        ("ufc-picks-backend/app/controllers/admin_controller.py",),
+        ("ufc-picks-backend/app/controllers/admin/timing.py",),
         ("update_event_timing", "update_bout_timing"),
         ("events", "bouts"),
         ("update_one", "update_many"),
@@ -658,7 +678,7 @@ WRITER_PATHS = (
         "Admin result and lifecycle controls",
         "backend",
         "admin_override",
-        ("ufc-picks-backend/app/controllers/admin_controller.py",),
+        ("ufc-picks-backend/app/controllers/admin/results.py", "ufc-picks-backend/app/controllers/admin/locks.py"),
         (
             "update_bout_result",
             "delete_bout_result",
@@ -678,7 +698,7 @@ WRITER_PATHS = (
         "Admin bout/title/slot editor",
         "backend",
         "admin_override",
-        ("ufc-picks-backend/app/controllers/admin_controller.py",),
+        ("ufc-picks-backend/app/controllers/admin/bouts.py",),
         ("update_bout_details",),
         ("bouts", "event_card_slots"),
         ("update_one",),
@@ -693,7 +713,7 @@ WRITER_PATHS = (
         "Admin cancellation and hard deletion",
         "backend",
         "admin_override",
-        ("ufc-picks-backend/app/controllers/admin_controller.py",),
+        ("ufc-picks-backend/app/controllers/admin/bouts.py",),
         ("cancel_bout", "delete_bout"),
         ("events", "bouts", "event_card_slots"),
         ("update_one", "delete_one"),
@@ -781,7 +801,7 @@ DISCREPANCIES = (
         "Store field-level Admin evidence/revision through the normalizer and make reconciliation compare observations rather than mutate the slot directly.",
         (
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/bouts.py",
                 "update_bout_details",
                 '{"$set": slot_update}',
                 "Admin slot update carries no source/evidence marker.",
@@ -894,7 +914,7 @@ DISCREPANCIES = (
                 ),
             ),
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/bouts.py",
                 "cancel_bout",
                 'delete_result = await db["picks"].delete_many({"bout_id": bout_id})',
                 "Admin cancellation deletes canonical picks.",
@@ -922,7 +942,7 @@ DISCREPANCIES = (
                 ),
             ),
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/bouts.py",
                 "update_bout_details",
                 'slot_update["card_section"] = body.card_section',
                 "Admin mutates slot structure only.",
@@ -953,7 +973,7 @@ DISCREPANCIES = (
                 "Tapology writes a default title boolean without respecting Admin authority.",
             ),
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/bouts.py",
                 "update_bout_details",
                 'bout_update["is_title_fight"] = body.is_title_fight',
                 "Admin stores its choice only as a boolean, without a durable override marker.",
@@ -981,7 +1001,7 @@ DISCREPANCIES = (
                 ),
             ),
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/results.py",
                 "update_bout_result",
                 '"result": result_data,',
                 "Admin replaces the result without version metadata.",
@@ -1000,7 +1020,7 @@ DISCREPANCIES = (
         "Represent timing observations independently, resolve per field, derive month_key from the frozen official date and keep the winning evidence.",
         (
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/timing.py",
                 "build_event_timing_updates",
                 'updates["timing_source"] = "admin"',
                 "Only event timing receives an Admin marker.",
@@ -1082,7 +1102,7 @@ DISCREPANCIES = (
                 ),
             ),
             SourceEvidence(
-                "ufc-picks-backend/app/controllers/admin_controller.py",
+                "ufc-picks-backend/app/controllers/admin/results.py",
                 "_complete_event_when_all_results_exist",
                 'active_bouts = [\n        bout for bout in bouts if bout.get("status") != "cancelled"',
                 "Completion removes cancelled bouts before comparing to event total.",
