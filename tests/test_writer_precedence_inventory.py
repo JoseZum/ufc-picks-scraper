@@ -45,9 +45,14 @@ def scan_source(source: str, path: str = ESPN_SPIDER):
 
 @requires_workspace
 def test_every_candidate_mutation_file_is_explicitly_classified():
-    expected = tuple(sorted(item.path for item in MUTATION_FILES))
+    """Ningún escritor detectado puede quedar sin clasificar.
 
-    assert scan_candidate_mutation_files(WORKSPACE_ROOT) == expected
+    El inventario puede declarar de más (archivos que escriben colecciones
+    auxiliares y se documentan a mano), pero nunca de menos.
+    """
+    declared = {item.path for item in MUTATION_FILES}
+
+    assert set(scan_candidate_mutation_files(WORKSPACE_ROOT)) <= declared
 
 
 @requires_workspace
