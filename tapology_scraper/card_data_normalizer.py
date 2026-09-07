@@ -1,15 +1,12 @@
-"""Pure CardData V1 observation normalizer.
+"""Normalizador puro de observaciones de CardData V1.
 
-This module is the SCR-008 boundary between source-specific adapters and
-future persistence.  It accepts already-sanitized observations plus an
-optional previous CardData snapshot and returns a deterministic desired
-snapshot, semantic change set, and quarantines.  It has no database, network,
-Scrapy, or application-writer dependency.
+Recibe observaciones ya saneadas y el snapshot anterior, y devuelve el snapshot
+deseado, el set de cambios y las cuarentenas, siempre de forma determinista.
+No tiene base de datos, red ni Scrapy.
 
-The core intentionally does not allocate canonical IDs.  An adapter must
-provide the UFC Picks event/bout IDs it is proposing.  Identity evidence that
-is unsafe (date-only event matching, names-only bout matching, or a changed
-fighter set reusing an existing bout ID) is quarantined rather than guessed.
+No asigna IDs canónicos: el adaptador debe traerlos. La evidencia de identidad
+dudosa (emparejar evento solo por fecha, pelea solo por nombres, o reutilizar
+un bout ID con otros peleadores) se pone en cuarentena en vez de adivinarse.
 """
 
 from __future__ import annotations

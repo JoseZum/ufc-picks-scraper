@@ -1,18 +1,14 @@
-"""Replay standing Admin decisions on every canonical reconciliation.
+"""Reaplica las decisiones vigentes de Admin en cada reconciliación.
 
-`build_admin_card_observations` emits `admin_override` facts at rank 500, so an
-Admin decision beats any ESPN or Tapology signal for the same field. That only
-holds while the fact is *present* in the observation set, and the normalizer
-rebuilds the snapshot from observations alone.
+Un `admin_override` gana a cualquier señal de ESPN, pero solo mientras esté
+presente en el set de observaciones, y el normalizador reconstruye todo desde
+ahí. Por eso una escritura suelta de Admin no dura: la siguiente pasada de ESPN
+no menciona el campo y la decisión se revierte.
 
-So a one-off Admin write does not last: the next ESPN pass simply does not
-mention the field, evidence is rebuilt without it, and the decision reverts.
-The commands the backend persists in `admin_card_commands` are replayed here on
-every pass, which is what makes "Admin can never be overwritten" true over time
-rather than only immediately after the click.
-
-Admin observations are appended *after* the source observations so that when two
-sources resolve the same field, Admin is the one the normalizer sees last.
+Aquí se reproducen en cada pasada los comandos guardados en
+`admin_card_commands`, y eso es lo que hace cierto con el tiempo que a Admin no
+se le pisa. Se añaden después de las observaciones de origen para que, ante un
+empate, el normalizador vea a Admin en último lugar.
 """
 
 from __future__ import annotations

@@ -1,17 +1,13 @@
-"""Dry-run-first, idempotent persistence planning for CardData V1 slots.
+"""Planificación idempotente de los slots, siempre en dry-run primero.
 
-SCR-009 deliberately separates three concerns:
+`plan_slot_reconciliation` es un diff puro entre los slots persistidos y los
+que quiere el normalizador; el puerto de almacenamiento inyectado hace el
+compare-and-set atómico por evento, y `apply_slot_reconciliation` verifica que
+el plan aplicado sea exactamente el revisado.
 
-* :func:`plan_slot_reconciliation` is a pure diff from persisted slot
-  documents to the desired slots produced by ``CardDataNormalizerV1``;
-* an injected storage port owns the event-scoped atomic compare-and-set;
-* :func:`apply_slot_reconciliation` verifies the exact reviewed plan ID and
-  the final converged documents.
-
-The module never opens a database connection and is not wired into the current
-ESPN/Admin writers.  It never produces delete operations.  A persisted slot
-that is absent from the desired canonical snapshot blocks the plan so SCR-010,
-not a storage adapter, decides cancellation/removal semantics.
+No abre conexiones ni genera borrados. Un slot persistido que falta en el
+snapshot deseado bloquea el plan a propósito: quién se cancela lo decide la
+política de cambios, no un adaptador de storage.
 """
 
 from __future__ import annotations
