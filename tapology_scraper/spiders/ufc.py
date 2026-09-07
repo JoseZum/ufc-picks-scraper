@@ -1,6 +1,6 @@
 import scrapy
 import re
-from datetime import datetime, date
+from datetime import date
 
 from tapology_scraper.utils import extract_tapology_fighter_id
 
@@ -239,7 +239,7 @@ class UfcSpider(scrapy.Spider):
             if rounds_text and "x" in rounds_text:
                 try:
                     scheduled_rounds = int(rounds_text.split("x")[0].strip())
-                except:
+                except (ValueError, IndexError):
                     pass
 
             # Asignar peleadores a esquinas

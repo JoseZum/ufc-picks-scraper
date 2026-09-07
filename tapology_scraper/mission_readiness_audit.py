@@ -203,6 +203,11 @@ def _is_list(value: Any) -> bool:
     )
 
 
+def _is_int(value: Any) -> bool:
+    # bool es subclase de int y no cuenta como entero valido.
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _string(value: Any, fallback: str = "unknown") -> str:
     if isinstance(value, str) and value.strip():
         return value
@@ -349,9 +354,9 @@ def audit_snapshot(
     )
 
     raw_event_id = event.get("event_id")
-    event_id = raw_event_id if type(raw_event_id) is int else None
+    event_id = raw_event_id if _is_int(raw_event_id) else None
     raw_revision = root.get("snapshot_revision")
-    revision = raw_revision if type(raw_revision) is int else None
+    revision = raw_revision if _is_int(raw_revision) else None
     snapshot_id = root.get("snapshot_id")
     event_name = event.get("name")
 

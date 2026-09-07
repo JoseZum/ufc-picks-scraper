@@ -381,8 +381,13 @@ def _sequence(value: Any) -> Sequence[Any]:
     )
 
 
+def _is_int(value: Any) -> bool:
+    # bool es subclase de int y no cuenta como entero valido.
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _positive_int(value: Any) -> bool:
-    return type(value) is int and value >= 1
+    return _is_int(value) and value >= 1
 
 
 def _nonempty(value: Any) -> bool:
@@ -777,7 +782,7 @@ def _audit_eligibility(
     elif not (
         isinstance(snapshot.get("eligible_targets"), list)
         and isinstance(snapshot.get("excluded_targets"), list)
-        and type(snapshot.get("denominator")) is int
+        and _is_int(snapshot.get("denominator"))
         and _nonempty(snapshot.get("fingerprint"))
     ):
         issues.add(

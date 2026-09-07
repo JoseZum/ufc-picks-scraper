@@ -14,7 +14,6 @@ import scrapy
 import re
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-from datetime import datetime, date
 
 from ..utils import extract_tapology_fighter_id
 
@@ -75,7 +74,7 @@ class UfcFightersSpider(scrapy.Spider):
         self.mongo_client = AsyncIOMotorClient(mongo_uri)
         self.db = self.mongo_client.ufc_picks
 
-        self.logger.info(f"UFC Fighters Spider initialized")
+        self.logger.info("UFC Fighters Spider initialized")
         if self.target_event_id:
             self.logger.info(f"Targeting specific event: {self.target_event_id}")
         if self.limit:

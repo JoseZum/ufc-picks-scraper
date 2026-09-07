@@ -7,7 +7,6 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 

@@ -9,7 +9,6 @@ import json
 import os
 import re
 from datetime import datetime, date
-from bson import ObjectId
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -765,7 +764,7 @@ def cleanup_deleted_bouts(event_id: int, scraped_bout_ids: set):
 
 
 def main():
-    print(f"Starting UFC data ingestion...")
+    print("Starting UFC data ingestion...")
     print(f"Database: {DB_NAME}")
     print(f"Minimum date: {MIN_DATE}")
 
@@ -872,7 +871,7 @@ def main():
     print("\n" + "="*50)
     print("INGESTION COMPLETE")
     print("="*50)
-    print(f"\nPipeline cleanup:")
+    print("\nPipeline cleanup:")
     print(f"  - Duplicates cleaned: {stats['pipeline_dupes_cleaned']}")
     print(f"  - Migrated (rescued): {stats['pipeline_dupes_migrated']}")
     print(f"  - Cancelled removed: {stats['bouts_cancelled_removed']}")
