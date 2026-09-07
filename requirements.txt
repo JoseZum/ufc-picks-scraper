@@ -11,3 +11,5 @@ pytz==2024.1
 httpx==0.26.0
 cryptography==46.0.2
 boto3==1.34.34
+# ZoneInfo necesita la base IANA: Windows no la trae.
+tzdata==2026.3
