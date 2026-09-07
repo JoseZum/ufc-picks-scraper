@@ -1,25 +1,18 @@
-"""SCR-015/016 continuous CardData write boundary.
+"""Única frontera de escritura de CardData (SCR-015/016).
 
-Every ongoing CardData mutation, continuous ESPN observations and Admin
-date/timing/lifecycle/title/result commands, must enter through this module.
-The boundary owns three responsibilities and nothing else:
+Toda mutación pasa por aquí: reconstruye el snapshot previo desde los
+sidecars, lo resuelve con `normalize_card_data_v1` y `plan_slot_reconciliation`
+y proyecta el resultado a los campos legacy, que quedan derivados y nunca son
+autoridad propia.
 
-* rebuild the previous canonical snapshot from persisted sidecars;
-* run :func:`normalize_card_data_v1` and :func:`plan_slot_reconciliation`
-  over the merged observation set;
-* project the resolved snapshot back into the legacy top-level fields the
-  current API/UI still reads, so those fields become *derived*, never an
-  independent authority.
+Es puro salvo por el puerto de almacenamiento inyectado: no abre conexiones ni
+borra nada. Las peleas canceladas, pospuestas o reemplazadas se conservan con
+su estado de ciclo de vida (SCR-009/SCR-010).
 
-The module is pure apart from an injected storage port.  It never opens a
-database connection, never imports pymongo/scrapy/requests, and never emits a
-delete: cancelled, postponed and replaced bouts are retained with lifecycle
-state exactly as SCR-009/SCR-010 require.
-
-Precedence is inherited from the normalizer rather than re-implemented here.
-A persisted ``admin_override`` evidence entry outranks every ESPN/Tapology
-observation, and TITLE fields are resolved exclusively from Admin candidates,
-so a legacy writer cannot regain canonical authority by writing later.
+La precedencia la hereda del normalizador: una evidencia `admin_override`
+persistida gana a cualquier observación, y los campos de título salen solo de
+candidatos de Admin, así ningún writer legacy recupera autoridad escribiendo
+después.
 """
 
 from __future__ import annotations

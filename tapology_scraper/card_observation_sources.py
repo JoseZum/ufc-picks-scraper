@@ -1,26 +1,19 @@
-"""SCR-015/016 source adapters for the continuous CardData boundary.
+"""Adaptadores que convierten ESPN y los comandos de Admin en observaciones.
 
-Two ongoing sources feed :mod:`tapology_scraper.canonical_card_writer`:
+Ningún adaptador escribe, conecta ni decide precedencia: eso lo resuelve el
+normalizador con el orden Admin > metadata explícita de ESPN > inferencia del
+scraper > fallback en cuarentena.
 
-* the continuous ESPN scoreboard/competition path, and
-* Admin date/timing/lifecycle/title/result commands.
+Aquí sí se imponen tres invariantes, porque son decisiones de identidad y no
+de precedencia entre campos:
 
-Both are converted here into typed :class:`CardDataObservation` proposals.  No
-adapter writes a document, opens a connection or decides precedence: the
-normalizer resolves ``Admin override > explicit ESPN metadata > scraper
-inference > quarantined fallback`` from source rank and persisted evidence.
-
-Three invariants are enforced at this layer because they are identity
-decisions, not field precedence:
-
-* an event is matched only by a trusted ESPN alias, never by date alone
+* el evento se empareja solo por alias de ESPN de confianza, nunca por fecha
   (WP-001);
-* a bout is matched only by its source competition ID or canonical ID, never
-  by fuzzy fighter names (WP-013);
-* ESPN/Tapology TITLE signals are emitted as advisory suggestions only, so
-  Admin remains the sole authority for ``is_title_fight``,
-  ``is_bmf_title_fight`` and ``title_type`` in both the ``true`` and ``false``
-  direction (WP-007).
+* la pelea solo por su competition ID o su ID canónico, nunca por nombres
+  parecidos (WP-013);
+* las señales de título de ESPN/Tapology son advisory: Admin es la única
+  autoridad sobre `is_title_fight`, `is_bmf_title_fight` y `title_type`, tanto
+  para `true` como para `false` (WP-007).
 """
 
 from __future__ import annotations

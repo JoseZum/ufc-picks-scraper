@@ -1,22 +1,19 @@
-"""The durable channel from the late-change policy to the canonical writer.
+"""Canal duradero entre la política de cambios tardíos y el writer canónico.
 
-SCR-010 shipped `apply_card_change_policy` as a pure layer: it decides, with
-versioned evidence, when a bout that vanished from ESPN has been gone long
-enough to be removed for real.  Nothing in production ever called it, so the
-`BOUT_ABSENT_FROM_ESPN_PAYLOAD` warning kept pointing at a policy that never
-ran, and a bout whose matchup changed stayed on the card forever.
+`apply_card_change_policy` decide cuándo una pelea desaparecida de ESPN lleva
+ausente lo suficiente para borrarse, pero nadie la llamaba: el aviso
+`BOUT_ABSENT_FROM_ESPN_PAYLOAD` apuntaba a una política que nunca corría y una
+pelea cambiada se quedaba en la card para siempre.
 
-Two things were missing, and both live here:
+Faltaban dos piezas, y las dos viven aquí. La política solo es replay-safe
+porque acumula evidencia entre corridas (tres payloads completos de ESPN,
+separados 30 minutos), y esa evidencia no la persistía nadie. Además sus
+observaciones de borrado solo existían en memoria: hay que entregárselas al
+writer canónico o la decisión se tira.
 
-1. The policy is replay-safe *because* it accumulates evidence across runs, three complete ESPN-detail payloads, at least 30 minutes apart.  That
-   evidence has to survive between crawls, and nothing persisted it.
-2. The policy only normalises its removal observations in memory.  Whoever
-   persists has to hand them to the canonical writer, or the confirmed removal
-   is decided and then thrown away.
-
-This module is deliberately shaped like `admin_command_replay`: load standing
-state, fold it into the observation list, hand back what the caller must
-persist.  It never writes canonical collections itself.
+Tiene la misma forma que `admin_command_replay`: carga el estado, lo mezcla
+con las observaciones y devuelve lo que el llamador debe persistir. No escribe
+colecciones canónicas.
 """
 
 from __future__ import annotations
