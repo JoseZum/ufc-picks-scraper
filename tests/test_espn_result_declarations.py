@@ -1,8 +1,8 @@
 """Regression for Paris: two DEC winners accompanied by submission attempts."""
 import pytest
 
-from tapology_scraper.espn_etl import normalize_result_method, transform_result
 from tapology_scraper.card_observation_sources import _espn_result_values
+from tapology_scraper.espn_etl import normalize_result_method, transform_result
 
 
 @pytest.mark.parametrize('marker,method,family', [

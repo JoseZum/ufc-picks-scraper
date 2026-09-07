@@ -18,22 +18,22 @@ Examples:
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timedelta, timezone
 import os
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
+import scrapy
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
-import scrapy
 
+from tapology_scraper.admin_command_replay import with_admin_overrides
 from tapology_scraper.canonical_card_writer import (
     CANONICAL_EVENT_FIELDS,
     CanonicalCardWriteError,
     MongoCanonicalCardStore,
     submit_card_observations,
 )
-from tapology_scraper.admin_command_replay import with_admin_overrides
 from tapology_scraper.card_observation_sources import (
     ObservationSourceError,
     build_espn_card_observations,
@@ -58,7 +58,6 @@ from tapology_scraper.espn_etl import (
     transform_competition_metadata,
     transform_event,
 )
-
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
 ESPN_USER_AGENT = "UFC-Picks/1.0 (+https://ufcpicks.app) python-httpx/0.27.0"
@@ -754,7 +753,7 @@ class EspnSpider(scrapy.Spider):
             event_id, {"payload": None, "details": {}, "observed_at": None}
         )
         cache["payload"] = copy.deepcopy(espn_event)
-        cache["observed_at"] = datetime.now(timezone.utc).strftime(
+        cache["observed_at"] = datetime.now(UTC).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         self._submit_card_observations(event_id)

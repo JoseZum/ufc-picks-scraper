@@ -29,8 +29,8 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional, Protocol
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from tapology_scraper.card_data_contract import validate_card_data_v1
 from tapology_scraper.card_data_normalizer import (
@@ -46,7 +46,6 @@ from tapology_scraper.slot_reconciliation import (
     plan_slot_reconciliation,
     slot_collection_digest,
 )
-
 
 BOUNDARY_VERSION = "canonical-card-boundary/v1"
 SNAPSHOT_SIDECAR_FIELD = "card_data_snapshot_v1"
@@ -188,7 +187,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 
 def _sequence(value: Any) -> Sequence[Any]:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return value
     return ()
 
@@ -201,12 +200,12 @@ def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _document_id(document: Mapping[str, Any]) -> Optional[int]:
+def _document_id(document: Mapping[str, Any]) -> int | None:
     value = document.get("id", document.get("_id"))
     return value if _positive_int(value) else None
 
 
-def mongo_datetime(value: Any) -> Optional[datetime]:
+def mongo_datetime(value: Any) -> datetime | None:
     """Convert a canonical ISO-8601 UTC string to a naive UTC datetime.
 
     Legacy documents store naive UTC datetimes; the canonical snapshot stores
@@ -224,7 +223,7 @@ def mongo_datetime(value: Any) -> Optional[datetime]:
         return None
     if parsed.tzinfo is None:
         return parsed
-    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed.astimezone(UTC).replace(tzinfo=None)
 
 
 def assert_legacy_card_update_allowed(
@@ -272,7 +271,7 @@ ADMIN_OWNED_BOUT_FIELDS = frozenset(
 ADMIN_SOURCE_KIND = "admin_override"
 
 
-def admin_owned_fields(bout: Optional[Mapping[str, Any]]) -> set:
+def admin_owned_fields(bout: Mapping[str, Any] | None) -> set:
     """The canonical fields on this bout that Admin has explicitly decided.
 
     A bare ``is_title_fight: false`` is indistinguishable from a scraper
@@ -293,7 +292,7 @@ def admin_owned_fields(bout: Optional[Mapping[str, Any]]) -> set:
 
 def strip_admin_owned(
     update: Mapping[str, Any],
-    bout: Optional[Mapping[str, Any]],
+    bout: Mapping[str, Any] | None,
 ) -> dict:
     """Remove the fields Admin decided from a lower-authority update.
 
@@ -312,7 +311,7 @@ class CanonicalCardState:
     """One event's persisted legacy documents plus canonical sidecars."""
 
     event_id: int
-    event: Optional[Mapping[str, Any]]
+    event: Mapping[str, Any] | None
     bouts: tuple[Mapping[str, Any], ...] = ()
     slots: tuple[Mapping[str, Any], ...] = ()
 
@@ -320,10 +319,10 @@ class CanonicalCardState:
     def build(
         cls,
         event_id: Any,
-        event: Optional[Mapping[str, Any]],
+        event: Mapping[str, Any] | None,
         bouts: Sequence[Mapping[str, Any]] = (),
         slots: Sequence[Mapping[str, Any]] = (),
-    ) -> "CanonicalCardState":
+    ) -> CanonicalCardState:
         if not _positive_int(event_id):
             raise CanonicalCardStateError("event_id must be a positive integer.")
         if event is not None and not isinstance(event, Mapping):
@@ -366,7 +365,7 @@ class CanonicalCardState:
         }
 
     @property
-    def espn_event_alias(self) -> Optional[str]:
+    def espn_event_alias(self) -> str | None:
         event = _mapping(self.event)
         alias = event.get("espn_event_id") or _mapping(event.get("source_ids")).get(
             "espn_event_id"
@@ -376,7 +375,7 @@ class CanonicalCardState:
 
 def rebuild_previous_snapshot(
     state: CanonicalCardState,
-) -> Optional[Mapping[str, Any]]:
+) -> Mapping[str, Any] | None:
     """Return the persisted canonical snapshot, or bootstrap it from sidecars.
 
     The SCR-013 backfill persisted per-document ``card_data_v1`` sidecars plus
@@ -430,9 +429,9 @@ def rebuild_previous_snapshot(
             value = slot.get(timing_field)
             if isinstance(value, datetime):
                 slot[timing_field] = (
-                    value.replace(tzinfo=timezone.utc)
+                    value.replace(tzinfo=UTC)
                     if value.tzinfo is None
-                    else value.astimezone(timezone.utc)
+                    else value.astimezone(UTC)
                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
         canonical_slots.append(slot)
     canonical_bouts.sort(key=lambda item: item["bout_id"])
@@ -551,7 +550,7 @@ def _stabilize_entity(current: dict[str, Any], previous: Mapping[str, Any]) -> N
         for key, entry in evidence.items():
             prior = previous_evidence.get(key)
             if key == "title_suggestions":
-                if isinstance(entry, Sequence) and not isinstance(entry, (str, bytes)):
+                if isinstance(entry, Sequence) and not isinstance(entry, str | bytes):
                     stabilized[key] = _stabilize_title_suggestions(
                         list(entry), _sequence(prior)
                     )
@@ -578,7 +577,7 @@ def _stabilize_entity(current: dict[str, Any], previous: Mapping[str, Any]) -> N
 
 def stabilize_snapshot_provenance(
     snapshot: Mapping[str, Any],
-    previous: Optional[Mapping[str, Any]],
+    previous: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Strip non-semantic churn from a freshly normalized snapshot.
 
@@ -691,9 +690,9 @@ def legacy_event_projection(snapshot: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def legacy_result_projection(
-    canonical_result: Optional[Mapping[str, Any]],
+    canonical_result: Mapping[str, Any] | None,
     fighters: Sequence[Mapping[str, Any]],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Project a canonical result into the legacy ``bouts.result`` shape."""
 
     if not isinstance(canonical_result, Mapping) or not canonical_result:
@@ -737,7 +736,7 @@ def legacy_result_projection(
 
 def legacy_bout_projection(
     canonical_bout: Mapping[str, Any],
-    canonical_slot: Optional[Mapping[str, Any]],
+    canonical_slot: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     """Project one canonical bout plus its slot into legacy ``bouts`` fields."""
 
@@ -851,7 +850,7 @@ class BoutDocumentWrite:
     action: str
     changed_fields: tuple[str, ...]
     values: Mapping[str, Any]
-    seed: Optional[Mapping[str, Any]] = None
+    seed: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -887,9 +886,9 @@ class CardWritePlan:
 
     boundary_version: str
     event_id: int
-    snapshot: Optional[Mapping[str, Any]]
-    change_set: Optional[Mapping[str, Any]]
-    slot_plan: Optional[SlotReconciliationPlan]
+    snapshot: Mapping[str, Any] | None
+    change_set: Mapping[str, Any] | None
+    slot_plan: SlotReconciliationPlan | None
     event_update: Mapping[str, Any] = field(default_factory=dict)
     bout_writes: tuple[BoutDocumentWrite, ...] = ()
     quarantines: tuple[Quarantine, ...] = ()
@@ -1161,8 +1160,8 @@ class CardWriteReceipt:
     event_id: int
     dry_run: bool
     applied: bool
-    snapshot_id: Optional[str]
-    slot_plan_id: Optional[str]
+    snapshot_id: str | None
+    slot_plan_id: str | None
     operation_count: int
     verified_converged: bool
 

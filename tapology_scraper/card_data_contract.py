@@ -11,10 +11,9 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 
 CONTRACT_VERSION = "card-data/v1"
 
@@ -49,7 +48,7 @@ class ContractIssue:
     code: str
     severity: str
     scope_type: str
-    scope_id: Optional[str]
+    scope_id: str | None
     field: str
     message: str
     blocks_capabilities: tuple[str, ...]
@@ -139,7 +138,7 @@ def _is_mapping(value: Any) -> bool:
 
 def _is_list(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -159,19 +158,19 @@ def _nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _utc_datetime(value: Any) -> Optional[datetime]:
+def _utc_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+    if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
         return None
     return parsed
 
 
-def _iso_date(value: Any) -> Optional[date]:
+def _iso_date(value: Any) -> date | None:
     if not isinstance(value, str):
         return None
     try:
@@ -188,7 +187,7 @@ def _require_mapping(
     scope_type: str,
     scope_id: Any,
     blocks: Sequence[str],
-) -> Optional[Mapping[str, Any]]:
+) -> Mapping[str, Any] | None:
     value = parent.get(field)
     if not _is_mapping(value):
         issues.add(
@@ -210,7 +209,7 @@ def _require_list(
     scope_type: str,
     scope_id: Any,
     blocks: Sequence[str],
-) -> Optional[Sequence[Any]]:
+) -> Sequence[Any] | None:
     value = parent.get(field)
     if not _is_list(value):
         issues.add(
@@ -234,7 +233,7 @@ def _validate_datetime_field(
     blocks: Sequence[str],
     *,
     nullable: bool = False,
-) -> Optional[datetime]:
+) -> datetime | None:
     value = parent.get(field)
     if nullable and value is None:
         return None
@@ -333,7 +332,7 @@ def _validate_source_run(snapshot: Mapping[str, Any], issues: _Issues) -> None:
 
 def _validate_event(
     snapshot: Mapping[str, Any], issues: _Issues
-) -> tuple[Optional[Mapping[str, Any]], Optional[int]]:
+) -> tuple[Mapping[str, Any] | None, int | None]:
     event = _require_mapping(
         snapshot, "event", issues, "snapshot", snapshot.get("snapshot_id"), ("EVT",)
     )
@@ -511,7 +510,7 @@ def _validate_event_section_times(event: Mapping[str, Any], issues: _Issues) -> 
 
 
 def _index_bouts(
-    snapshot: Mapping[str, Any], event_id: Optional[int], issues: _Issues
+    snapshot: Mapping[str, Any], event_id: int | None, issues: _Issues
 ) -> tuple[list[Mapping[str, Any]], dict[int, Mapping[str, Any]]]:
     raw_bouts = _require_list(
         snapshot, "bouts", issues, "snapshot", snapshot.get("snapshot_id"), ("BOUT",)
@@ -936,7 +935,7 @@ def _validate_replacement_links(
 
 def _index_slots(
     snapshot: Mapping[str, Any],
-    event_id: Optional[int],
+    event_id: int | None,
     by_bout_id: Mapping[int, Mapping[str, Any]],
     issues: _Issues,
 ) -> tuple[list[Mapping[str, Any]], list[Mapping[str, Any]]]:
@@ -1087,7 +1086,7 @@ def _index_slots(
 
 
 def _validate_current_structure(
-    event: Optional[Mapping[str, Any]],
+    event: Mapping[str, Any] | None,
     current_slots: Sequence[Mapping[str, Any]],
     issues: _Issues,
 ) -> None:
@@ -1268,7 +1267,7 @@ def _validate_aggregate_timing(
 
 def _validate_eligibility(
     snapshot: Mapping[str, Any],
-    event: Optional[Mapping[str, Any]],
+    event: Mapping[str, Any] | None,
     by_bout_id: Mapping[int, Mapping[str, Any]],
     current_slots: Sequence[Mapping[str, Any]],
     issues: _Issues,
@@ -1616,7 +1615,7 @@ def _validate_quality(snapshot: Mapping[str, Any], issues: _Issues) -> None:
 
 
 def _validate_cross_entity_lifecycle(
-    event: Optional[Mapping[str, Any]],
+    event: Mapping[str, Any] | None,
     by_bout_id: Mapping[int, Mapping[str, Any]],
     current_slots: Sequence[Mapping[str, Any]],
     issues: _Issues,

@@ -23,7 +23,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 
 from tapology_scraper.card_data_contract import (
     CAPABILITIES,
@@ -31,7 +31,6 @@ from tapology_scraper.card_data_contract import (
     ContractIssue,
     validate_card_data_v1,
 )
-
 
 AUDIT_SCHEMA_VERSION = "mission-readiness-audit/v1"
 EXIT_READY = 0
@@ -75,7 +74,7 @@ class DeclaredQualityIssue:
     code: str
     severity: str
     scope_type: str
-    scope_id: Optional[str]
+    scope_id: str | None
     field: str
     message: str
     blocks_capabilities: tuple[str, ...]
@@ -89,10 +88,10 @@ class DeclaredQualityIssue:
 @dataclass(frozen=True)
 class SnapshotAudit:
     source: str
-    snapshot_id: Optional[str]
-    event_id: Optional[int]
-    snapshot_revision: Optional[int]
-    event_name: Optional[str]
+    snapshot_id: str | None
+    event_id: int | None
+    snapshot_revision: int | None
+    event_name: str | None
     declared_overall: str
     contract_valid: bool
     required_capabilities_ready: bool
@@ -199,7 +198,7 @@ def _is_mapping(value: Any) -> bool:
 
 def _is_list(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -682,7 +681,7 @@ def _output_is_inside(output: Path, candidate_parent: Path) -> bool:
     return True
 
 
-def ensure_safe_output(output_value: str, input_values: Sequence[str]) -> Optional[Path]:
+def ensure_safe_output(output_value: str, input_values: Sequence[str]) -> Path | None:
     """Prevent an explicit report from overwriting or entering its input set."""
 
     if output_value == "-":
@@ -738,7 +737,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
     *,
     stdin: TextIO = sys.stdin,
     stdout: TextIO = sys.stdout,

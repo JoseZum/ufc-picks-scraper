@@ -8,9 +8,10 @@ Valida, normaliza e inserta en MongoDB.
 import json
 import os
 import re
-from datetime import datetime, date
-from pymongo import MongoClient
+from datetime import date, datetime
+
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 from tapology_scraper.canonical_card_writer import strip_admin_owned
 
@@ -115,7 +116,7 @@ def detect_event_type(name: str) -> str:
     """Detectar si es un evento numerado o Fight Night."""
     if not name:
         return "fight_night"
-    
+
     name_lower = name.lower()
     # UFC 300, UFC 324, etc. son eventos numerados
     if re.search(r'ufc\s+\d{1,4}(?:\s|:|$)', name_lower):
@@ -791,7 +792,7 @@ def main():
 
     # 1. First pass: cargar bout_details en memoria para enriquecer fighters
     print("Loading bout details from raw.jsonl...")
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    with open("raw.jsonl", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)
@@ -806,7 +807,7 @@ def main():
 
     # 2. Procesar eventos
     print("\nProcessing events...")
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    with open("raw.jsonl", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)
@@ -824,7 +825,7 @@ def main():
     print("\nProcessing bouts...")
     seen_bout_ids = set()
 
-    with open("raw.jsonl", "r", encoding="utf-8") as f:
+    with open("raw.jsonl", encoding="utf-8") as f:
         for line in f:
             try:
                 item = json.loads(line)

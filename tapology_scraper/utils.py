@@ -1,8 +1,7 @@
 import re
-from typing import Optional
 
 
-def extract_tapology_fighter_id(url_or_path: Optional[str]) -> Optional[str]:
+def extract_tapology_fighter_id(url_or_path: str | None) -> str | None:
     """
     Extract the canonical Tapology fighter key from a fighter URL/path.
 

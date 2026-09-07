@@ -32,8 +32,7 @@ class TapologyScraperSpiderMiddleware:
         # it has processed the response.
 
         # Must return an iterable of Request, or item objects.
-        for i in result:
-            yield i
+        yield from result
 
     def process_spider_exception(self, response, exception, spider):
         # Called when a spider or process_spider_input() method

@@ -20,7 +20,6 @@ from tapology_scraper.mission_readiness_audit import (
     render_markdown,
 )
 
-
 OBSERVED_AT = "2026-07-31T18:00:00Z"
 
 

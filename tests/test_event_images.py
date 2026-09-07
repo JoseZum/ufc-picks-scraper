@@ -5,12 +5,12 @@ from scrapy.http import HtmlResponse, Request
 
 from tapology_scraper.spiders.event_images import (
     clean_event_name,
+    event_is_in_image_window,
+    event_is_in_season,
     extract_credit_url,
     extract_source_image_url,
     extract_ufc_event_date,
     extract_ufc_hero_url,
-    event_is_in_image_window,
-    event_is_in_season,
     image_response_is_valid,
     instagram_embed_url,
     is_supported_source_page,

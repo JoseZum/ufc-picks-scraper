@@ -12,10 +12,10 @@ import argparse
 import ast
 import re
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence, TextIO
-
+from typing import TextIO
 
 CAPABILITIES = ("EVT", "EVT_DATE", "BOUT", "ELIG", "STRUCT", "TITLE", "RES")
 MUTATION_FILE_CATEGORIES = (
@@ -1682,7 +1682,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
 ) -> int:

@@ -105,12 +105,12 @@ def test_load_without_db_is_empty():
 
 
 def test_coverage_declares_present_bouts_and_is_deterministic():
-    kwargs = dict(
-        observed_at="2026-08-08T00:00:00Z",
-        source_event_id="600060621",
-        payload={"id": "600060621"},
-        coverage_kind="complete",
-    )
+    kwargs = {
+        "observed_at": "2026-08-08T00:00:00Z",
+        "source_event_id": "600060621",
+        "payload": {"id": "600060621"},
+        "coverage_kind": "complete",
+    }
     first = build_coverage(900001, [3, 1, 2], **kwargs)
     second = build_coverage(900001, [3, 1, 2], **kwargs)
     first.validate()
@@ -120,11 +120,11 @@ def test_coverage_declares_present_bouts_and_is_deterministic():
 
 
 def test_different_payload_yields_different_coverage_identity():
-    common = dict(
-        observed_at="2026-08-08T00:00:00Z",
-        source_event_id="600060621",
-        coverage_kind="complete",
-    )
+    common = {
+        "observed_at": "2026-08-08T00:00:00Z",
+        "source_event_id": "600060621",
+        "coverage_kind": "complete",
+    }
     a = build_coverage(900001, [1], payload={"id": "a"}, **common)
     b = build_coverage(900001, [1], payload={"id": "b"}, **common)
     assert a.payload_hash != b.payload_hash
@@ -177,10 +177,10 @@ def test_persisted_snapshot_is_accepted_by_the_policy():
     Without the bridge every real call degrades to "policy skipped", which is
     exactly why the policy only ever ran on snapshots it had just built itself.
     """
+    import test_card_change_policy as helpers
+
     from tapology_scraper.card_data_contract import validate_card_data_v1
     from tapology_scraper.card_presence_replay import restore_source_run
-
-    import test_card_change_policy as helpers
 
     persisted = dict(helpers.build_snapshot())
     persisted.pop("source_run")
@@ -199,12 +199,12 @@ def test_three_misses_reach_the_writer_as_a_cancelled_bout():
     This is the Miles Johns case. Each pass stores its own evidence, and only
     the third crosses the threshold and cancels the bout on the card.
     """
+    import test_card_change_policy as helpers
+
     from tapology_scraper.canonical_card_writer import (
         InMemoryCanonicalCardStore,
         submit_card_observations,
     )
-
-    import test_card_change_policy as helpers
 
     event_id = helpers.EVENT_ID
     ghost = 402

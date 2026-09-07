@@ -14,7 +14,6 @@ from tapology_scraper.card_data_contract import validate_card_data_v1
 from tapology_scraper.card_data_normalizer import normalize_card_data_v1
 from tapology_scraper.slot_reconciliation import plan_slot_reconciliation
 
-
 EVENT_ID = 83001
 INITIAL_AT = "2026-08-01T12:00:00Z"
 COVERAGE_1 = "2026-08-22T10:00:00Z"

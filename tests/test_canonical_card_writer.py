@@ -54,7 +54,6 @@ from tapology_scraper.card_observation_sources import (
     build_espn_card_observations,
 )
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "espn" / "card_data_v1"
 EVENT_ID = 880101
 T1 = "2026-08-01T12:00:00Z"

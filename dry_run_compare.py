@@ -21,7 +21,6 @@ from typing import Any
 from dotenv import dotenv_values
 from pymongo import MongoClient
 
-
 BASE_DIR = Path(__file__).resolve().parent
 ARTIFACTS_DIR = BASE_DIR / "artifacts" / "dry-run"
 
@@ -204,7 +203,7 @@ def build_snapshot(items: list[dict[str, Any]]) -> dict[str, Any]:
         seen_bout_ids.add(bout_id)
         bout_docs.append(deepcopy(ingest.transform_bout(item)))
 
-    for bout_id, detail in sorted(ingest.bout_details_cache.items()):
+    for _bout_id, detail in sorted(ingest.bout_details_cache.items()):
         if int(detail.get("event_id", 0)) not in valid_event_ids:
             continue
         bout_detail_docs.append(build_bout_detail_doc(detail, run_now))
@@ -355,7 +354,7 @@ def collect_diff_paths(left: Any, right: Any, path: str = "") -> list[str]:
         if len(left) != len(right):
             paths.append(path or "$")
             return paths
-        for index, (left_item, right_item) in enumerate(zip(left, right)):
+        for index, (left_item, right_item) in enumerate(zip(left, right, strict=False)):
             next_path = f"{path}[{index}]" if path else f"[{index}]"
             paths.extend(collect_diff_paths(left_item, right_item, next_path))
         return paths

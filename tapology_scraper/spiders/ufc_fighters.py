@@ -10,10 +10,11 @@ Usage:
     scrapy crawl ufc_fighters -a LIMIT=100         # Limitar cantidad de peleadores
 """
 
-import scrapy
-import re
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
+
+import scrapy
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from ..utils import extract_tapology_fighter_id
 
@@ -45,7 +46,7 @@ class UfcFightersSpider(scrapy.Spider):
     allowed_domains = ["tapology.com"]
 
     custom_settings = {
-        "DOWNLOAD_DELAY": 2.0, 
+        "DOWNLOAD_DELAY": 2.0,
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
         "ROBOTSTXT_OBEY": False,
         "FEED_EXPORT_ENCODING": "utf-8",
@@ -62,7 +63,7 @@ class UfcFightersSpider(scrapy.Spider):
     }
 
     def __init__(self, EVENT_ID=None, LIMIT=None, *args, **kwargs):
-        super(UfcFightersSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
         self.limit = int(LIMIT) if LIMIT else None
 

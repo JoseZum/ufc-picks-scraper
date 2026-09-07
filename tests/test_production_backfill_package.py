@@ -11,12 +11,12 @@ from tapology_scraper.production_backfill_package import (
     AUTHORIZATION_SCHEMA_VERSION,
     EXIT_CONFIGURATION_ERROR,
     EXIT_PREPARED,
+    TARGET_EVENT_IDS,
+    TARGET_SPECS,
     MongoCardDataBackfillAdapter,
     ProductionBackfillDriftError,
     ProductionBackfillExecutionError,
     ProductionBackfillPackageError,
-    TARGET_EVENT_IDS,
-    TARGET_SPECS,
     create_preimage_key_file,
     decrypt_preimage_archive,
     encrypt_preimage_archive,
@@ -29,7 +29,6 @@ from tapology_scraper.production_backfill_package import (
     write_encrypted_preimages,
 )
 from tapology_scraper.production_card_audit import LegacyCardDocuments
-
 
 PRIVATE_FIGHTER_MARKER = "PRIVATE FIGHTER NAME MUST NEVER APPEAR"
 CREATED_AT = "2026-08-01T12:00:00Z"
@@ -76,7 +75,7 @@ def build_card(spec):
     bouts = []
     slots = []
     section_counts = {}
-    for index, (bout_id, section) in enumerate(zip(bout_ids, sections), start=1):
+    for index, (bout_id, section) in enumerate(zip(bout_ids, sections, strict=False), start=1):
         section_counts[section] = section_counts.get(section, 0) + 1
         cancelled = spec.event_id == 136871 and index == len(bout_ids)
         bout_status = "cancelled" if cancelled else status

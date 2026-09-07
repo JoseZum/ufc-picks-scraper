@@ -23,16 +23,16 @@ Usage:
     scrapy crawl fighter_images -a FIGHTER_ID=123456   # Un peleador específico
 """
 
-import scrapy
 import os
+
 import httpx
+import scrapy
 from motor.motor_asyncio import AsyncIOMotorClient
-from typing import Optional
 
 from ..utils import extract_tapology_fighter_id
 
 
-def _image_key_matches_fighter(image_key: Optional[str], fighter_id: Optional[str]) -> bool:
+def _image_key_matches_fighter(image_key: str | None, fighter_id: str | None) -> bool:
     if not image_key or not fighter_id or "." not in image_key:
         return False
     return image_key.rsplit(".", 1)[0] == f"fighters/{fighter_id}"
@@ -40,9 +40,9 @@ def _image_key_matches_fighter(image_key: Optional[str], fighter_id: Optional[st
 
 def _build_fighter_lookup_query(
     corner: str,
-    canonical_id: Optional[str],
-    source_id: Optional[str],
-    tapology_url: Optional[str],
+    canonical_id: str | None,
+    source_id: str | None,
+    tapology_url: str | None,
 ) -> dict:
     clauses = []
 
@@ -95,7 +95,7 @@ class FighterImagesSpider(scrapy.Spider):
             FIGHTER_ID: Procesar solo un peleador específico
             FORCE: Re-download all images even if they already exist (for quality upgrades)
         """
-        super(FighterImagesSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
         self.target_fighter_id = FIGHTER_ID
         self.limit = int(LIMIT) if LIMIT else None
@@ -341,8 +341,8 @@ class FighterImagesSpider(scrapy.Spider):
         fighter_name: str,
         image_url: str,
         image_type: str,
-        tapology_url: Optional[str] = None,
-        source_tapology_id: Optional[str] = None,
+        tapology_url: str | None = None,
+        source_tapology_id: str | None = None,
     ) -> dict:
         """
         Crear item para procesar en el pipeline
@@ -495,7 +495,7 @@ class FighterImagesPipeline:
             raise RuntimeError(
                 f"No se pudo importar el servicio S3: {e}. "
                 "Verifica que boto3 esté instalado."
-            )
+            ) from e
 
     async def process_item(self, item, spider):
         """

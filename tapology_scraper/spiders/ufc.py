@@ -1,6 +1,7 @@
-import scrapy
 import re
 from datetime import date
+
+import scrapy
 
 from tapology_scraper.utils import extract_tapology_fighter_id
 
@@ -14,7 +15,7 @@ class UfcSpider(scrapy.Spider):
     MIN_DATE = date(2026, 1, 1)
 
     def __init__(self, EVENT_ID=None, EVENT_URL=None, MODE=None, SKIP_BOUT_DETAILS=None, *args, **kwargs):
-        super(UfcSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
         self.target_event_url = EVENT_URL
         self.mode = MODE  # "descubrimiento" o "resultados"
@@ -96,7 +97,7 @@ class UfcSpider(scrapy.Spider):
         # Analizar fecha/hora desde un campo estructurado
         date_time_str = event_data.get('Date/Time', '')
         date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})\s+at\s+(\d{2}):(\d{2})\s*(AM|PM)\s*ET', date_time_str)
-        
+
         if not date_match:
             return
 
@@ -167,9 +168,9 @@ class UfcSpider(scrapy.Spider):
             card_label = bout_wrapper.css("span.uppercase.font-bold a::text").get()
             if not card_label:
                 card_label = bout_wrapper.css("span.uppercase.font-bold::text").get()
-            
+
             card_label = card_label.strip() if card_label else None
-            
+
             # Normalizar cartelera a categorías estándar
             if card_label:
                 if "Main Event" in card_label or "Co-Main Event" in card_label:
@@ -184,18 +185,18 @@ class UfcSpider(scrapy.Spider):
                     card = "Cartelera Principal"  # Predeterminado
             else:
                 card = "Main Card"
-            
+
             # Rastrear posición dentro de la cartelera
             if card in card_counters:
                 card_counters[card] += 1
-            
+
             is_main = "Main Event" in card_label if card_label else False
             is_co_main = "Co-Main Event" in card_label if card_label else False
-            
+
             # Extraer peso en libras
             weight_span = bout_wrapper.css("span.bg-tap_darkgold::text").get()
             weight_lbs = int(weight_span) if weight_span and weight_span.strip().isdigit() else None
-            
+
             # Extraer texto de la categoría de peso (por ejemplo, "Peso Mosca", "Peso Wélter")
             weight_class_text = None
             card_info = bout_wrapper.css("span.text-tap_gold::text, span.text-tap_darkgold::text").get()
@@ -205,15 +206,15 @@ class UfcSpider(scrapy.Spider):
                 if len(parts) >= 2:
                     weight_part = parts[1]
                     weight_class_text = weight_part.split("·")[0].strip() if "·" in weight_part else weight_part.strip()
-            
+
             # Extraer información del título
             title_text = bout_wrapper.css("span.text-tap_darkgold::text").getall()
             is_title_fight = any("Championship" in t or "Title" in t for t in title_text)
-            
+
             # Verificar cancelación
             all_text = " ".join(bout_wrapper.css("::text").getall())
             cancelled = "cancelled" in all_text.lower() or "postponed" in all_text.lower()
-            
+
             # Asignar nombres e IDs de peleadores a esquinas roja/azul (el primero es rojo, el segundo es azul)
             # IMPORTANTE: Deduplicar por href porque cada peleador aparece multiples veces en el HTML
             fighter_links = bout_wrapper.css('a[href*="/fighters/"]')
@@ -232,7 +233,7 @@ class UfcSpider(scrapy.Spider):
                             "tapology_url": response.urljoin(href),
                             "name": name.strip()
                     })
-            
+
             # Extraer cuantos rounds son
             rounds_text = bout_wrapper.css("div.text-xs11::text").get()
             scheduled_rounds = None

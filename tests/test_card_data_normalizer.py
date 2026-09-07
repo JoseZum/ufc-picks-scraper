@@ -11,7 +11,6 @@ from tapology_scraper.card_data_normalizer import (
     normalize_card_data_v1,
 )
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "espn" / "card_data_v1"
 EVENT_ID = 81001
 T1 = "2026-08-01T12:00:00Z"

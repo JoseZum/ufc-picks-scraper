@@ -12,7 +12,6 @@ from tapology_scraper.card_data_contract import (
 )
 from tapology_scraper.espn_etl import infer_competition_sections
 
-
 FIXTURE = (
     Path(__file__).parent
     / "fixtures"

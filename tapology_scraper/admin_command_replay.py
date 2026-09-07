@@ -18,7 +18,7 @@ sources resolve the same field, Admin is the one the normalizer sees last.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional
+from typing import Any
 
 from tapology_scraper.canonical_card_writer import CanonicalCardState
 from tapology_scraper.card_observation_sources import (
@@ -102,7 +102,7 @@ def admin_observations(
 def with_admin_overrides(
     source_observations: Sequence[Any],
     state: CanonicalCardState,
-    db: Optional[Any] = None,
+    db: Any | None = None,
 ) -> tuple[list[Any], list[str]]:
     """Source observations plus every standing Admin decision, Admin last."""
     commands = load_admin_commands(db, state.event_id)

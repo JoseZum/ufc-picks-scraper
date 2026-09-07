@@ -29,7 +29,6 @@ from tapology_scraper.production_card_audit import (
     LegacyCardDocuments,
 )
 
-
 FIGHTER_NAME_MARKER = "PRIVATE FIGHTER NAME MUST NEVER APPEAR"
 
 

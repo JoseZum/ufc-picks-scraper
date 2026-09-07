@@ -16,20 +16,19 @@ is never reconciled or deleted by this spider.
 
 from __future__ import annotations
 
+import os
+import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from html import unescape
-import os
-import re
-import unicodedata
 from urllib.parse import urlencode, urlparse
 
-from parsel import Selector
-from pymongo import MongoClient
 import requests
 import scrapy
-
+from parsel import Selector
+from pymongo import MongoClient
 
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 UFC_EVENTS_URL = "https://www.ufcespanol.com/events"
@@ -945,7 +944,7 @@ class EventImagesSpider(scrapy.Spider):
             if isinstance(url, str) and url.startswith(("https://", "http://"))
         }
         with ThreadPoolExecutor(max_workers=6) as executor:
-            live_urls = dict(zip(urls, executor.map(image_url_is_live, urls)))
+            live_urls = dict(zip(urls, executor.map(image_url_is_live, urls), strict=False))
         broken_posters = [
             event_id
             for event_id, (poster_url, _) in event_images.items()

@@ -24,18 +24,18 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional
+from typing import Any
 
+from tapology_scraper.canonical_card_writer import (
+    CanonicalCardState,
+    rebuild_previous_snapshot,
+)
 from tapology_scraper.card_change_policy import (
     BoutPresenceState,
     CardChangePolicyInputError,
     CardChangePolicyResult,
     CardCoverageObservation,
     apply_card_change_policy,
-)
-from tapology_scraper.canonical_card_writer import (
-    CanonicalCardState,
-    rebuild_previous_snapshot,
 )
 
 COLLECTION = "card_presence_states"
@@ -54,8 +54,8 @@ def _canonical_digest(value: Any) -> str:
 
 
 def restore_source_run(
-    snapshot: Optional[Mapping[str, Any]],
-) -> Optional[Mapping[str, Any]]:
+    snapshot: Mapping[str, Any] | None,
+) -> Mapping[str, Any] | None:
     """Give a persisted snapshot back the `source_run` the policy demands.
 
     The writer strips `source_run` on purpose -- it describes the run that
@@ -85,7 +85,7 @@ def restore_source_run(
     return restored
 
 
-def load_presence_states(db: Optional[Any], event_id: int) -> list[dict]:
+def load_presence_states(db: Any | None, event_id: int) -> list[dict]:
     """Every standing presence record for this card, oldest bout first."""
     if db is None:
         return []
@@ -98,7 +98,7 @@ def load_presence_states(db: Optional[Any], event_id: int) -> list[dict]:
 
 
 def store_presence_states(
-    db: Optional[Any],
+    db: Any | None,
     event_id: int,
     states: Sequence[BoutPresenceState | Mapping[str, Any]],
 ) -> int:
@@ -158,9 +158,9 @@ def build_coverage(
 def with_change_policy(
     source_observations: Sequence[Any],
     state: CanonicalCardState,
-    coverage: Optional[CardCoverageObservation | Mapping[str, Any]],
-    db: Optional[Any] = None,
-) -> tuple[list[Any], Optional[CardChangePolicyResult], list[str]]:
+    coverage: CardCoverageObservation | Mapping[str, Any] | None,
+    db: Any | None = None,
+) -> tuple[list[Any], CardChangePolicyResult | None, list[str]]:
     """Source observations plus any removal the absence policy confirmed.
 
     Returns the observations to submit, the policy result (so the caller can

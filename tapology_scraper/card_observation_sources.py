@@ -30,8 +30,8 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from tapology_scraper.canonical_card_writer import CanonicalCardState
@@ -39,13 +39,12 @@ from tapology_scraper.espn_etl import (
     infer_competition_sections,
     map_competitors_to_corners,
     name_similarity,
-    normalize_weight_class,
     normalize_result_method,
+    normalize_weight_class,
     parse_espn_datetime,
     result_detail_texts,
     sorted_competitors,
 )
-
 
 OBSERVATION_SOURCE_VERSION = "continuous-card-observations/v1"
 EVENT_TIMEZONE = "America/New_York"
@@ -142,7 +141,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 
 def _sequence(value: Any) -> Sequence[Any]:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return value
     return ()
 
@@ -171,14 +170,14 @@ def _finding(
     )
 
 
-def utc_string(value: Any) -> Optional[str]:
+def utc_string(value: Any) -> str | None:
     """Return a canonical ``YYYY-MM-DDTHH:MM:SSZ`` string or ``None``."""
 
     if isinstance(value, datetime):
         parsed = (
-            value.replace(tzinfo=timezone.utc)
+            value.replace(tzinfo=UTC)
             if value.tzinfo is None
-            else value.astimezone(timezone.utc)
+            else value.astimezone(UTC)
         )
         return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
     if not _nonempty(value):
@@ -199,7 +198,7 @@ def _observation(
     prefix: str,
     suffix: str,
     identity_basis: str = "canonical_id",
-    reason: Optional[str] = None,
+    reason: str | None = None,
     clear_fields: Sequence[str] = (),
 ) -> dict[str, Any]:
     payload = {
@@ -336,11 +335,11 @@ def _infer_espn_replacements(
 
 
 def _persisted_fighter_id(
-    legacy_bout: Optional[Mapping[str, Any]],
+    legacy_bout: Mapping[str, Any] | None,
     corner: str,
     espn_athlete_id: str,
-    display_name: Optional[str],
-) -> Optional[str]:
+    display_name: str | None,
+) -> str | None:
     """Reuse an already-canonical fighter ID for the same human.
 
     Matching by source alias first and display name second preserves a stable
@@ -380,8 +379,8 @@ def _persisted_fighter_id(
 def _fighter_reference(
     competitor: Mapping[str, Any],
     corner: str,
-    legacy_bout: Optional[Mapping[str, Any]],
-) -> Optional[dict[str, Any]]:
+    legacy_bout: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
     athlete = _mapping(competitor.get("athlete"))
     athlete_id = str(competitor.get("id") or athlete.get("id") or "")
     display_name = athlete.get("displayName") or athlete.get("fullName")
@@ -397,7 +396,7 @@ def _fighter_reference(
     }
 
 
-def _scheduled_rounds(competition: Mapping[str, Any]) -> Optional[int]:
+def _scheduled_rounds(competition: Mapping[str, Any]) -> int | None:
     periods = _mapping(_mapping(competition.get("format")).get("regulation")).get(
         "periods"
     )
@@ -412,7 +411,7 @@ def _method_family(detail_texts: Sequence[str]) -> str:
     return "other"
 
 
-def _ending_seconds(display_clock: Any) -> Optional[int]:
+def _ending_seconds(display_clock: Any) -> int | None:
     if not _nonempty(display_clock) or ":" not in display_clock:
         return None
     minutes, _, seconds = display_clock.partition(":")
@@ -426,7 +425,7 @@ def _ending_seconds(display_clock: Any) -> Optional[int]:
 def _espn_result_values(
     competition: Mapping[str, Any],
     fighters: Sequence[Mapping[str, Any]],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     status = _mapping(competition.get("status"))
     if not _mapping(status.get("type")).get("completed"):
         return None
@@ -476,7 +475,7 @@ def _espn_result_values(
     }
 
 
-def _official_event_date(section_starts: Mapping[str, str]) -> Optional[str]:
+def _official_event_date(section_starts: Mapping[str, str]) -> str | None:
     if not section_starts:
         return None
     earliest = min(section_starts.values())
@@ -491,7 +490,7 @@ def build_espn_card_observations(
     state: CanonicalCardState,
     *,
     observed_at: str,
-    competition_metadata: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    competition_metadata: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ObservationBatch:
     """Convert one ESPN scoreboard event into canonical observations.
 
@@ -854,7 +853,7 @@ class AdminCardCommand:
     event_id: int
     observed_at: str
     reason: str
-    bout_id: Optional[int] = None
+    bout_id: int | None = None
     values: Mapping[str, Any] = field(default_factory=dict)
 
     def validate(self) -> None:

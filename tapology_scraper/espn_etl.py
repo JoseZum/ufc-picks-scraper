@@ -7,13 +7,12 @@ already-ingested Tapology card.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from difflib import SequenceMatcher
 import re
 import unicodedata
+from datetime import UTC, date, datetime
+from difflib import SequenceMatcher
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
-
 
 ESPN_FIGHTCENTER_URL = (
     "https://www.espn.com/mma/fightcenter/_/id/{event_id}/league/ufc"
@@ -105,8 +104,8 @@ def parse_espn_datetime(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def mongo_utc_datetime(value: str | None) -> datetime | None:
@@ -504,7 +503,7 @@ def transform_event(espn_event: dict, internal_id: int) -> dict:
     section_times = build_section_times_utc(competitions, sections)
     earliest_section_time = min(section_times.values(), default=None)
     event_datetime = (
-        earliest_section_time.replace(tzinfo=timezone.utc)
+        earliest_section_time.replace(tzinfo=UTC)
         if earliest_section_time
         else parse_espn_datetime(espn_event.get("date"))
     )

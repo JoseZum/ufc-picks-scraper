@@ -12,7 +12,6 @@ from tapology_scraper.espn_etl import (
     transform_result,
 )
 
-
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "espn" / "card_data_v1"
 MANIFEST = json.loads((FIXTURE_DIR / "manifest.json").read_text(encoding="utf-8"))
 

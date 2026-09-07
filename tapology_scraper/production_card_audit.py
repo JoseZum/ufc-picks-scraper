@@ -19,13 +19,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import dotenv_values
 
 from tapology_scraper.card_data_contract import CAPABILITIES
-
 
 AUDIT_SCHEMA_VERSION = "production-card-audit/v1"
 AUDITED_COLLECTIONS = ("events", "bouts", "event_card_slots")
@@ -44,7 +43,7 @@ class GoldenCardSpec:
     event_id: int
     expected_name: str
     scenario_tags: tuple[str, ...]
-    expected_espn_event_id: Optional[str] = None
+    expected_espn_event_id: str | None = None
     expected_sections: tuple[str, ...] = ()
     minimum_title_bouts: int = 0
     minimum_retained_cancelled_bouts: int = 0
@@ -193,7 +192,7 @@ class ProductionAuditConfigurationError(ValueError):
 @dataclass(frozen=True)
 class LegacyCardDocuments:
     spec: GoldenCardSpec
-    event: Optional[Mapping[str, Any]]
+    event: Mapping[str, Any] | None
     bouts: tuple[Mapping[str, Any], ...]
     slots: tuple[Mapping[str, Any], ...]
 
@@ -236,7 +235,7 @@ class ProductionCardAudit:
     scenario_tags: tuple[str, ...]
     event_found: bool
     observed_status: str
-    observed_date: Optional[str]
+    observed_date: str | None
     counts: tuple[tuple[str, int], ...]
     section_counts: tuple[tuple[str, int], ...]
     result_method_counts: tuple[tuple[str, int], ...]
@@ -339,7 +338,7 @@ class _Issues:
         affected_ids: Iterable[Any],
         message: str,
         *,
-        affected_count: Optional[int] = None,
+        affected_count: int | None = None,
     ) -> None:
         ids = sorted({str(value) for value in affected_ids if value is not None})
         self.items.append(
@@ -376,7 +375,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 def _sequence(value: Any) -> Sequence[Any]:
     return (
         value
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
         else ()
     )
 
@@ -411,7 +410,7 @@ def _document_id(document: Mapping[str, Any]) -> Any:
     return document.get("id") or document.get("bout_id") or document.get("slot_id")
 
 
-def _date_string(value: Any) -> Optional[str]:
+def _date_string(value: Any) -> str | None:
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, date):
@@ -434,7 +433,7 @@ def _iana_timezone(value: Any) -> bool:
     return True
 
 
-def _fighter_identity(fighter: Any) -> Optional[str]:
+def _fighter_identity(fighter: Any) -> str | None:
     fighter = _mapping(fighter)
     for field in ("fighter_id", "espn_id", "tapology_id"):
         value = fighter.get(field)
@@ -521,7 +520,7 @@ def _validate_orders(
 def _audit_event(
     card: LegacyCardDocuments,
     issues: _Issues,
-) -> tuple[str, Optional[str], bool]:
+) -> tuple[str, str | None, bool]:
     event = card.event
     if event is None:
         for capability in CAPABILITIES:
@@ -1355,7 +1354,7 @@ def fetch_allowlisted_cards(
     return tuple(cards)
 
 
-def load_mongo_settings(env_file: Optional[Path] = None) -> tuple[str, str]:
+def load_mongo_settings(env_file: Path | None = None) -> tuple[str, str]:
     """Load credentials into memory without ever returning them in a report."""
 
     values: Mapping[str, Any] = {}
@@ -1545,7 +1544,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
     *,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,

@@ -12,10 +12,9 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
-
+from typing import Any
 
 ATTESTATION_SCHEMA_VERSION = "admin-title-attestation/v1"
 DRY_RUN_AUTHORIZED_USE = "CARD_DATA_BACKFILL_DRY_RUN_ONLY"
@@ -35,7 +34,7 @@ def _nonempty(value: Any) -> bool:
 
 
 def _sequence(value: Any) -> Sequence[Any]:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return value
     return ()
 
@@ -48,16 +47,16 @@ def _hash(value: Any) -> str:
     return "sha256:" + hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
-def _utc_timestamp(value: Any) -> Optional[str]:
+def _utc_timestamp(value: Any) -> str | None:
     if not _nonempty(value):
         return None
     try:
         parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+    if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
         return None
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
@@ -212,7 +211,7 @@ def parse_admin_title_attestation(value: Any) -> AdminTitleAttestation:
 
     raw_title_bouts = value.get("title_bouts")
     if not isinstance(raw_title_bouts, Sequence) or isinstance(
-        raw_title_bouts, (str, bytes, bytearray)
+        raw_title_bouts, str | bytes | bytearray
     ):
         raise AdminTitleAttestationError("title_bouts must be an array.")
 

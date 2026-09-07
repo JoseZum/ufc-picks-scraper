@@ -23,7 +23,6 @@ from tapology_scraper.writer_precedence_inventory import (
     validate_inventory,
 )
 
-
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_WRITER = "ufc-picks-scraper/tapology_scraper/canonical_card_writer.py"
 ESPN_SPIDER = "ufc-picks-scraper/tapology_scraper/spiders/espn.py"

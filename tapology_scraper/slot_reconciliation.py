@@ -22,10 +22,9 @@ import json
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from tapology_scraper.card_data_contract import validate_card_data_v1
-
 
 PLAN_VERSION = "slot-reconciliation-plan/v1"
 SLOT_STORAGE_VERSION = "card-slot/v1"
@@ -73,12 +72,12 @@ class SlotReconciliationApplyError(RuntimeError):
 @dataclass(frozen=True)
 class SlotConflict:
     code: str
-    slot_id: Optional[str]
-    bout_id: Optional[int]
+    slot_id: str | None
+    bout_id: int | None
     message: str
     blocking: bool = True
-    current_structure_revision: Optional[int] = None
-    desired_structure_revision: Optional[int] = None
+    current_structure_revision: int | None = None
+    desired_structure_revision: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -91,12 +90,12 @@ class SlotOperation:
     slot_id: str
     event_id: int
     bout_id: int
-    expected_fingerprint: Optional[str]
+    expected_fingerprint: str | None
     desired_fingerprint: str
-    expected_structure_revision: Optional[int]
+    expected_structure_revision: int | None
     desired_structure_revision: int
     changed_fields: tuple[str, ...]
-    before: Optional[Mapping[str, Any]]
+    before: Mapping[str, Any] | None
     after: Mapping[str, Any]
 
     def as_dict(self) -> dict[str, Any]:
@@ -124,7 +123,7 @@ class SlotReconciliationPlan:
     plan_id: str
     event_id: int
     snapshot_id: str
-    previous_snapshot_revision: Optional[int]
+    previous_snapshot_revision: int | None
     new_snapshot_revision: int
     desired_structure_revision: int
     current_digest: str
@@ -217,7 +216,7 @@ class SlotApplyResult:
 
 def _is_sequence(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -325,7 +324,7 @@ def _desired_document(
     return document
 
 
-def _slot_identity(document: Mapping[str, Any]) -> tuple[Optional[str], Optional[int]]:
+def _slot_identity(document: Mapping[str, Any]) -> tuple[str | None, int | None]:
     raw_slot_id = document.get("slot_id") or document.get("id") or document.get("_id")
     slot_id = str(raw_slot_id) if raw_slot_id is not None else None
     bout_id = document.get("bout_id")
@@ -349,7 +348,7 @@ def _changed_fields(
 
 def _operation(
     action: str,
-    current: Optional[Mapping[str, Any]],
+    current: Mapping[str, Any] | None,
     desired: Mapping[str, Any],
     changed_fields: Sequence[str],
 ) -> SlotOperation:
@@ -709,10 +708,10 @@ def _convergence_conflicts(
 
 def apply_slot_reconciliation(
     plan: SlotReconciliationPlan,
-    store: Optional[SlotReconciliationStore] = None,
+    store: SlotReconciliationStore | None = None,
     *,
     dry_run: bool = True,
-    expected_plan_id: Optional[str] = None,
+    expected_plan_id: str | None = None,
 ) -> SlotApplyResult:
     """Apply one exact reviewed plan through an atomic injected storage port."""
 

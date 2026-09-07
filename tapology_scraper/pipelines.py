@@ -5,10 +5,11 @@ This pipeline handles inserting and updating scraped UFC data into MongoDB.
 It processes events, bouts, and bout details separately.
 """
 
-import os
 import logging
-from motor.motor_asyncio import AsyncIOMotorClient
+import os
 from datetime import datetime
+
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from tapology_scraper.canonical_card_writer import strip_admin_owned
 

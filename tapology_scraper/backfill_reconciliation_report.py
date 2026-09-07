@@ -17,9 +17,9 @@ import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 
 from tapology_scraper.admin_title_attestation import (
     AdminTitleAttestation,
@@ -43,7 +43,6 @@ from tapology_scraper.slot_reconciliation import (
     SlotReconciliationPlan,
     plan_slot_reconciliation,
 )
-
 
 REPORT_VERSION = "card-data-backfill-dry-run/v1"
 PROJECTION_VERSION = "legacy-card-projection/v1"
@@ -158,8 +157,8 @@ class BackfillCardDryRun:
     expected_name: str
     scenario_tags: tuple[str, ...]
     review_status: str
-    snapshot_id: Optional[str]
-    slot_plan_id: Optional[str]
+    snapshot_id: str | None
+    slot_plan_id: str | None
     counts: tuple[tuple[str, int], ...]
     capability_states: tuple[tuple[str, str], ...]
     changed_fields: tuple[tuple[str, int], ...]
@@ -189,15 +188,15 @@ class CardBackfillProjection:
     """Internal desired state plus its sanitized operator-facing result."""
 
     result: BackfillCardDryRun
-    snapshot: Optional[Mapping[str, Any]]
-    slot_plan: Optional[SlotReconciliationPlan]
+    snapshot: Mapping[str, Any] | None
+    slot_plan: SlotReconciliationPlan | None
 
 
 @dataclass(frozen=True)
 class BackfillDryRunReport:
     cards: tuple[BackfillCardDryRun, ...]
-    title_attestation_id: Optional[str] = None
-    title_attestation_decision_ref: Optional[str] = None
+    title_attestation_id: str | None = None
+    title_attestation_decision_ref: str | None = None
     title_attestation_scope: tuple[int, ...] = ()
     title_attestation_explicit_bout_count: int = 0
     title_attestation_applied_bout_count: int = 0
@@ -275,7 +274,7 @@ class BackfillDryRunReport:
 
 def _is_sequence(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -299,17 +298,17 @@ def _hash(value: Any) -> str:
     return "sha256:" + hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
-def _document_id(document: Mapping[str, Any]) -> Optional[int]:
+def _document_id(document: Mapping[str, Any]) -> int | None:
     value = document.get("id") or document.get("bout_id")
     return value if _positive_int(value) else None
 
 
-def _utc_string(value: Any) -> Optional[str]:
+def _utc_string(value: Any) -> str | None:
     if isinstance(value, datetime):
         parsed = value
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
     if isinstance(value, str):
         candidate = value.strip()
         if not candidate:
@@ -319,12 +318,12 @@ def _utc_string(value: Any) -> Optional[str]:
         except ValueError:
             return None
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
     return None
 
 
-def _date_string(value: Any) -> Optional[str]:
+def _date_string(value: Any) -> str | None:
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, date):
@@ -381,7 +380,7 @@ def _observation(
     source_event_id: str,
     suffix: str,
     observed_at: str = BACKFILL_OBSERVED_AT,
-    reason: Optional[str] = None,
+    reason: str | None = None,
     identity_basis: str = "canonical_id",
 ) -> dict[str, Any]:
     resolved_reason = reason
@@ -420,7 +419,7 @@ def _finding(
     ids: Iterable[Any],
     message: str,
     *,
-    affected_count: Optional[int] = None,
+    affected_count: int | None = None,
 ) -> BackfillFinding:
     normalized_ids = tuple(sorted({str(item) for item in ids if item is not None})[:3])
     return BackfillFinding(
@@ -449,7 +448,7 @@ def _fighter_ref(
     corner: str,
     bout_id: int,
     findings: list[BackfillFinding],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     raw_id = raw.get("fighter_id")
     espn_id = raw.get("espn_id")
     tapology_id = raw.get("tapology_id")
@@ -488,7 +487,7 @@ def _fighter_ref(
     }
 
 
-def _method_family(value: Any) -> Optional[str]:
+def _method_family(value: Any) -> str | None:
     if not _nonempty(value):
         return None
     normalized = value.lower().replace("/", "_").replace("-", "_")
@@ -503,7 +502,7 @@ def _method_family(value: Any) -> Optional[str]:
     return "other"
 
 
-def _ending_seconds(value: Any) -> Optional[int]:
+def _ending_seconds(value: Any) -> int | None:
     if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 300:
         return value
     if not _nonempty(value) or ":" not in value:
@@ -520,7 +519,7 @@ def _result_values(
     bout: Mapping[str, Any],
     fighter_refs: Sequence[Mapping[str, Any]],
     findings: list[BackfillFinding],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     raw = _mapping(bout.get("result"))
     if not raw:
         return None
@@ -686,9 +685,9 @@ def _legacy_slot_index(
 def _slot_seed(
     card: LegacyCardDocuments,
     bout: Mapping[str, Any],
-    slot: Optional[Mapping[str, Any]],
+    slot: Mapping[str, Any] | None,
     findings: list[BackfillFinding],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     bout_id = _document_id(bout)
     if bout_id is None:
         return None
@@ -758,9 +757,9 @@ def _title_observation(
     source_event_id: str,
     bout: Mapping[str, Any],
     *,
-    attested_values: Optional[Mapping[str, Any]] = None,
-    attestation: Optional[AdminTitleAttestation] = None,
-) -> Optional[dict[str, Any]]:
+    attested_values: Mapping[str, Any] | None = None,
+    attestation: AdminTitleAttestation | None = None,
+) -> dict[str, Any] | None:
     if attested_values is not None:
         if attestation is None:
             raise AdminTitleAttestationError(
@@ -813,8 +812,8 @@ def _title_observation(
 def _build_observations(
     card: LegacyCardDocuments,
     findings: list[BackfillFinding],
-    attestation: Optional[AdminTitleAttestation] = None,
-) -> Optional[list[dict[str, Any]]]:
+    attestation: AdminTitleAttestation | None = None,
+) -> list[dict[str, Any]] | None:
     if not _identity_safe(card, findings):
         return None
     event = _mapping(card.event)
@@ -1419,7 +1418,7 @@ def _empty_card_result(
 
 def build_card_backfill_projection(
     card: LegacyCardDocuments,
-    attestation: Optional[AdminTitleAttestation] = None,
+    attestation: AdminTitleAttestation | None = None,
 ) -> CardBackfillProjection:
     """Build desired CardData plus a sanitized deterministic dry-run result."""
 
@@ -1514,7 +1513,7 @@ def build_card_backfill_projection(
 
 def build_card_dry_run(
     card: LegacyCardDocuments,
-    attestation: Optional[AdminTitleAttestation] = None,
+    attestation: AdminTitleAttestation | None = None,
 ) -> BackfillCardDryRun:
     """Build one deterministic no-write projection from projected legacy docs."""
 
@@ -1523,7 +1522,7 @@ def build_card_dry_run(
 
 def build_backfill_dry_run(
     cards: Iterable[LegacyCardDocuments],
-    attestation: Optional[AdminTitleAttestation] = None,
+    attestation: AdminTitleAttestation | None = None,
 ) -> BackfillDryRunReport:
     card_values = tuple(cards)
     if attestation is not None:
@@ -1608,7 +1607,7 @@ def run_backfill_dry_run(
     uri: str,
     database_name: str,
     specs: Sequence[GoldenCardSpec] = GOLDEN_CARD_SPECS,
-    attestation: Optional[AdminTitleAttestation] = None,
+    attestation: AdminTitleAttestation | None = None,
 ) -> BackfillDryRunReport:
     """Run bounded majority reads and keep every proposed change in memory."""
 
@@ -1847,7 +1846,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
     *,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,

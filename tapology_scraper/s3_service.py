@@ -6,9 +6,8 @@ No depende del backend, obtiene configuración directamente de variables de ento
 """
 
 import os
-from io import BytesIO
-from typing import Optional
 import unicodedata
+from io import BytesIO
 
 
 class S3ServiceError(Exception):
@@ -79,10 +78,10 @@ class S3Service:
                     aws_secret_access_key=self.aws_secret_access_key,
                     region_name=self.aws_region
                 )
-            except ImportError:
+            except ImportError as err:
                 raise S3NotConfiguredError(
                     "boto3 no está instalado. Instalar con: pip install boto3"
-                )
+                ) from err
 
         return self._s3_client
 
@@ -115,7 +114,7 @@ class S3Service:
         s3_key: str,
         image_data: bytes,
         content_type: str = "image/jpeg",
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> None:
         """
         Sube una imagen a S3
@@ -165,7 +164,7 @@ class S3Service:
 
 
 # Instancia singleton del servicio
-_s3_service_instance: Optional[S3Service] = None
+_s3_service_instance: S3Service | None = None
 
 
 def get_s3_service() -> S3Service:

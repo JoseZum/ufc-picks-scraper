@@ -26,8 +26,8 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from tapology_scraper.card_data_contract import validate_card_data_v1
 from tapology_scraper.card_data_normalizer import (
@@ -36,7 +36,6 @@ from tapology_scraper.card_data_normalizer import (
     NormalizationResult,
     normalize_card_data_v1,
 )
-
 
 POLICY_VERSION = "card-change-policy/v1"
 AUTHORITATIVE_COMPLETE_SOURCE = "espn_detail"
@@ -71,7 +70,7 @@ class CardCoverageObservation:
     present_bout_ids: tuple[int, ...]
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "CardCoverageObservation":
+    def from_mapping(cls, value: Mapping[str, Any]) -> CardCoverageObservation:
         if not isinstance(value, Mapping):
             raise CardChangePolicyInputError("coverage must be an object.")
         present = value.get("present_bout_ids", ())
@@ -141,14 +140,14 @@ class BoutPresenceState:
     bout_id: int
     disposition: str
     consecutive_complete_misses: int
-    first_qualifying_missing_at: Optional[str]
+    first_qualifying_missing_at: str | None
     last_missing_at: str
     last_coverage_id: str
     last_payload_hash: str
     source_kind: str
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "BoutPresenceState":
+    def from_mapping(cls, value: Mapping[str, Any]) -> BoutPresenceState:
         if not isinstance(value, Mapping):
             raise CardChangePolicyInputError(
                 "Every previous presence state must be an object."
@@ -216,7 +215,7 @@ class PolicyFinding:
     code: str
     severity: str
     event_id: int
-    bout_id: Optional[int]
+    bout_id: int | None
     message: str
     action: str
     evidence: Mapping[str, Any]
@@ -259,7 +258,7 @@ class CardChangePolicyResult:
 
 def _is_sequence(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -271,7 +270,7 @@ def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _parse_utc(value: Any) -> Optional[datetime]:
+def _parse_utc(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.endswith("Z"):
         return None
     try:
@@ -280,7 +279,7 @@ def _parse_utc(value: Any) -> Optional[datetime]:
         return None
     if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
         return None
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def _canonical(value: Any) -> str:
@@ -377,10 +376,10 @@ def _normalize_states(
 def _finding(
     code: str,
     event_id: int,
-    bout_id: Optional[int],
+    bout_id: int | None,
     message: str,
     action: str,
-    evidence: Optional[Mapping[str, Any]] = None,
+    evidence: Mapping[str, Any] | None = None,
     severity: str = "warning",
 ) -> PolicyFinding:
     return PolicyFinding(
@@ -431,7 +430,7 @@ def _valid_bout_transition(
 
 def _guard_lifecycle(
     observations: Sequence[CardDataObservation],
-    previous_snapshot: Optional[Mapping[str, Any]],
+    previous_snapshot: Mapping[str, Any] | None,
     event_id: int,
 ) -> tuple[tuple[CardDataObservation, ...], list[PolicyFinding]]:
     if previous_snapshot is None:
@@ -510,7 +509,7 @@ def _guard_lifecycle(
 
 def _coverage_window_reason(
     previous_snapshot: Mapping[str, Any], coverage: CardCoverageObservation
-) -> Optional[str]:
+) -> str | None:
     event = previous_snapshot.get("event", {})
     if event.get("status") != "scheduled":
         return "EVENT_NOT_SCHEDULED"
@@ -571,8 +570,8 @@ def _policy_change(
 
 
 def _process_coverage(
-    previous_snapshot: Optional[Mapping[str, Any]],
-    coverage: Optional[CardCoverageObservation],
+    previous_snapshot: Mapping[str, Any] | None,
+    coverage: CardCoverageObservation | None,
     previous_states: dict[int, BoutPresenceState],
     observations: Sequence[CardDataObservation],
     event_id: int,
@@ -891,7 +890,7 @@ def _effects_for_change(change: Mapping[str, Any]) -> tuple[str, ...]:
 
 def _canonical_policy_changes(
     normalization: NormalizationResult,
-    previous_snapshot: Optional[Mapping[str, Any]],
+    previous_snapshot: Mapping[str, Any] | None,
 ) -> list[dict[str, Any]]:
     changes = []
     for raw in normalization.change_set.get("changes", []):
@@ -950,7 +949,7 @@ def _canonical_policy_changes(
 
 
 def _eligibility_delta(
-    previous_snapshot: Optional[Mapping[str, Any]],
+    previous_snapshot: Mapping[str, Any] | None,
     current_snapshot: Mapping[str, Any],
 ) -> dict[str, Any]:
     before = (
@@ -1042,9 +1041,9 @@ def _finalize_confirmed_states(
 
 def apply_card_change_policy(
     observations: Sequence[CardDataObservation | Mapping[str, Any]],
-    previous_snapshot: Optional[Mapping[str, Any]] = None,
+    previous_snapshot: Mapping[str, Any] | None = None,
     *,
-    coverage: Optional[CardCoverageObservation | Mapping[str, Any]] = None,
+    coverage: CardCoverageObservation | Mapping[str, Any] | None = None,
     previous_presence_states: Sequence[
         BoutPresenceState | Mapping[str, Any]
     ] = (),

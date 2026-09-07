@@ -23,9 +23,9 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 
 from bson import json_util
 from cryptography.fernet import Fernet, InvalidToken
@@ -58,7 +58,6 @@ from tapology_scraper.slot_reconciliation import (
     SlotOperation,
     SlotReconciliationPlan,
 )
-
 
 PACKAGE_SCHEMA_VERSION = "production-carddata-backfill-package/v1"
 PREIMAGE_ARCHIVE_VERSION = "production-carddata-preimages/v1"
@@ -96,16 +95,16 @@ def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _utc_timestamp(value: Any) -> Optional[str]:
+def _utc_timestamp(value: Any) -> str | None:
     if not _nonempty(value):
         return None
     try:
         parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+    if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
         return None
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _canonical(value: Any) -> str:
@@ -155,7 +154,7 @@ def _changed_fields(
     return tuple(field for field in fields if _field_changed(current, desired, field))
 
 
-def _document_id(document: Mapping[str, Any]) -> Optional[int]:
+def _document_id(document: Mapping[str, Any]) -> int | None:
     value = document.get("id") or document.get("bout_id")
     return value if _positive_int(value) else None
 
@@ -319,7 +318,7 @@ class BackfillRunManifest:
     event_plans: tuple[EventPackageManifest, ...]
     preimage_set_digest: str
     desired_set_digest: str
-    encrypted_archive_digest: Optional[str] = None
+    encrypted_archive_digest: str | None = None
 
     @property
     def target_event_ids(self) -> tuple[int, ...]:
@@ -368,7 +367,7 @@ class EventBackfillPlan:
     slot_plan: SlotReconciliationPlan
     preimage_payload: Mapping[str, Any]
     desired_state_payload: Mapping[str, Any]
-    event_write: Optional[DocumentWritePlan]
+    event_write: DocumentWritePlan | None
     bout_writes: tuple[DocumentWritePlan, ...]
 
 
@@ -384,7 +383,7 @@ def _event_write_plan(
     current: Mapping[str, Any],
     desired: Mapping[str, Any],
     event_id: int,
-) -> Optional[DocumentWritePlan]:
+) -> DocumentWritePlan | None:
     if not _field_changed(current, {"card_data_v1": desired}, "card_data_v1"):
         return None
     return DocumentWritePlan(
@@ -611,7 +610,7 @@ def decrypt_preimage_archive(
             "Preimage archive digest does not match the run."
         )
     events = archive.get("events")
-    if not isinstance(events, Sequence) or isinstance(events, (str, bytes, bytearray)):
+    if not isinstance(events, Sequence) or isinstance(events, str | bytes | bytearray):
         raise ProductionBackfillPackageError("Preimage archive events are invalid.")
     actual_digest = _hash(
         [
@@ -832,7 +831,7 @@ def parse_production_write_authorization(value: Any) -> ProductionWriteAuthoriza
         )
     raw_events = value.get("target_event_ids")
     if not isinstance(raw_events, Sequence) or isinstance(
-        raw_events, (str, bytes, bytearray)
+        raw_events, str | bytes | bytearray
     ):
         raise ProductionBackfillPackageError("Authorization event scope is invalid.")
     event_ids = tuple(raw_events)
@@ -842,7 +841,7 @@ def parse_production_write_authorization(value: Any) -> ProductionWriteAuthoriza
         )
     raw_plans = value.get("slot_plan_ids")
     if not isinstance(raw_plans, Sequence) or isinstance(
-        raw_plans, (str, bytes, bytearray)
+        raw_plans, str | bytes | bytearray
     ):
         raise ProductionBackfillPackageError("Authorization slot plans are invalid.")
     plans = []
@@ -902,7 +901,7 @@ def load_production_write_authorization(path: Path) -> ProductionWriteAuthorizat
 @dataclass(frozen=True)
 class BackfillExecutionReceipt:
     run_id: str
-    authorization_id: Optional[str]
+    authorization_id: str | None
     dry_run: bool
     write_executed: bool
     event_states: tuple[tuple[int, str], ...]
@@ -1089,7 +1088,7 @@ class MongoCardDataBackfillAdapter:
     def execute(
         self,
         run: PreparedBackfillRun,
-        authorization: Optional[ProductionWriteAuthorization] = None,
+        authorization: ProductionWriteAuthorization | None = None,
         *,
         execute: bool = False,
     ) -> BackfillExecutionReceipt:
@@ -1157,7 +1156,7 @@ class MongoCardDataBackfillAdapter:
             _fetch_card_with_session(database, plan.spec, None)
             for plan in run.event_plans
         )
-        for plan, card in zip(run.event_plans, post_cards):
+        for plan, card in zip(run.event_plans, post_cards, strict=False):
             if _hash(_event_state_payload(card)) != _hash(plan.desired_state_payload):
                 raise ProductionBackfillExecutionError(
                     f"Post-commit state verification failed for event {plan.spec.event_id}."
@@ -1266,7 +1265,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Optional[Sequence[str]] = None,
+    argv: Sequence[str] | None = None,
     *,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
@@ -1307,7 +1306,7 @@ def main(
                 "Preimage key does not exist; use --create-key-file once."
             )
 
-        created_at = args.created_at or datetime.now(timezone.utc).isoformat().replace(
+        created_at = args.created_at or datetime.now(UTC).isoformat().replace(
             "+00:00", "Z"
         )
         attestation = load_admin_title_attestation(args.admin_title_attestation)

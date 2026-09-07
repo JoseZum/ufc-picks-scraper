@@ -20,12 +20,11 @@ import json
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
-from typing import Any, Optional
+from typing import Any
 
 from tapology_scraper.card_data_contract import CAPABILITIES, CONTRACT_VERSION
-
 
 NORMALIZER_VERSION = "1.0.0"
 ELIGIBILITY_RULES_VERSION = "card-eligibility/v1"
@@ -125,11 +124,11 @@ class CardDataObservation:
     values: Mapping[str, Any]
     clear_fields: tuple[str, ...] = ()
     identity_basis: str = "canonical_id"
-    reason: Optional[str] = None
-    payload_hash: Optional[str] = None
+    reason: str | None = None
+    payload_hash: str | None = None
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "CardDataObservation":
+    def from_mapping(cls, value: Mapping[str, Any]) -> CardDataObservation:
         if not isinstance(value, Mapping):
             raise NormalizationInputError("Every observation must be an object.")
         clear_fields = value.get("clear_fields", ())
@@ -212,7 +211,7 @@ class Quarantine:
     code: str
     observation_ids: tuple[str, ...]
     entity_type: str
-    entity_id: Optional[int]
+    entity_id: int | None
     field: str
     message: str
     blocks_capabilities: tuple[str, ...]
@@ -260,7 +259,7 @@ class _Candidate:
 
 def _is_sequence(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
+        value, str | bytes | bytearray
     )
 
 
@@ -272,14 +271,14 @@ def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _parse_utc(value: Any) -> Optional[datetime]:
+def _parse_utc(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+    if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
         return None
     return parsed
 
@@ -324,7 +323,7 @@ def _evidence_rank(value: Any) -> int:
     return SOURCE_RANKS.get(value.get("source_kind"), 0)
 
 
-def _evidence_time(value: Any) -> Optional[datetime]:
+def _evidence_time(value: Any) -> datetime | None:
     if not isinstance(value, Mapping):
         return None
     return _parse_utc(value.get("observed_at"))
@@ -335,7 +334,7 @@ def _quarantine(
     code: str,
     observations: Sequence[CardDataObservation],
     entity_type: str,
-    entity_id: Optional[int],
+    entity_id: int | None,
     field: str,
     message: str,
     capabilities: Sequence[str],
@@ -364,7 +363,7 @@ def _select_candidate(
     entity_id: int,
     field: str,
     capabilities: Sequence[str],
-) -> Optional[_Candidate]:
+) -> _Candidate | None:
     if not candidates:
         return None
     highest_rank = max(SOURCE_RANKS[item.observation.source_kind] for item in candidates)
@@ -582,7 +581,7 @@ def _resolve_nested_map(
 
 def _identity_filter(
     observations: Sequence[CardDataObservation],
-    previous_snapshot: Optional[Mapping[str, Any]],
+    previous_snapshot: Mapping[str, Any] | None,
     quarantines: list[Quarantine],
 ) -> tuple[CardDataObservation, ...]:
     previous_event = (
@@ -789,7 +788,7 @@ def _new_slot(event_id: int, bout_id: int) -> dict[str, Any]:
     }
 
 
-def _fighter_ids(value: Any) -> Optional[frozenset[str]]:
+def _fighter_ids(value: Any) -> frozenset[str] | None:
     if not _is_sequence(value):
         return None
     ids = []
@@ -1366,7 +1365,7 @@ def _eligibility_projection(
     bouts: Mapping[int, Mapping[str, Any]],
     slots: Mapping[int, Mapping[str, Any]],
     quarantines: Sequence[Quarantine],
-    previous: Optional[Mapping[str, Any]],
+    previous: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     blocked_bouts = {
         item.entity_id
@@ -1553,7 +1552,7 @@ def _change(
 
 
 def _build_changes(
-    previous: Optional[Mapping[str, Any]],
+    previous: Mapping[str, Any] | None,
     event: Mapping[str, Any],
     bouts: Mapping[int, Mapping[str, Any]],
     slots: Mapping[int, Mapping[str, Any]],
@@ -1869,7 +1868,7 @@ def _normalize_observations(
 
 def normalize_card_data_v1(
     observations: Sequence[CardDataObservation | Mapping[str, Any]],
-    previous_snapshot: Optional[Mapping[str, Any]] = None,
+    previous_snapshot: Mapping[str, Any] | None = None,
 ) -> NormalizationResult:
     """Resolve one event's observations without side effects.
 

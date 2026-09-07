@@ -10,16 +10,17 @@ Usage:
     scrapy crawl ufc_images -a EVENT_ID=135755
 """
 
-import scrapy
-import re
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
+
+import scrapy
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 class UfcImagesSpider(scrapy.Spider):
     name = "ufc_images"
     allowed_domains = ["tapology.com"]
-    
+
     custom_settings = {
         "DOWNLOAD_DELAY": 1.5,
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
@@ -38,7 +39,7 @@ class UfcImagesSpider(scrapy.Spider):
     }
 
     def __init__(self, MODE=None, EVENT_ID=None, *args, **kwargs):
-        super(UfcImagesSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.mode = MODE  # 'events', 'bouts', o None (ambos)
         self.target_event_id = EVENT_ID
 
@@ -76,11 +77,11 @@ class UfcImagesSpider(scrapy.Spider):
         query = {}
         if self.target_event_id:
             query["event_id"] = int(self.target_event_id)
-        
+
         try:
             bouts = await self.db.bouts.find(query).to_list(length=None)
             self.logger.info(f"Found {len(bouts)} bouts to scrape for fighter images")
-            
+
             for bout in bouts:
                 tap_url = bout.get("tapology_url") or bout.get("url")
                 bout_id = bout.get("id") or bout.get("_id") or bout.get("bout_id")
@@ -101,31 +102,31 @@ class UfcImagesSpider(scrapy.Spider):
     def parse_bout_images(self, response):
         """Extraer headshots de fighters (red y blue)"""
         bout_id = response.meta["bout_id"]
-        
+
         # Buscar headshot images
         # Tapology muestra primero red corner, luego blue corner
         headshot_imgs = response.css('img[src*="headshot_images"]::attr(src)').getall()
-        
+
         if len(headshot_imgs) < 2:
             # Intentar con letterbox_images como fallback
             headshot_imgs = response.css('img[src*="letterbox_images"]::attr(src)').getall()
-        
+
         if len(headshot_imgs) < 2:
             self.logger.warning(f"Not enough fighter images for bout {bout_id} (found {len(headshot_imgs)})")
             return
-        
+
         # Normalizar URLs
         red_img = self._normalize_image_url(headshot_imgs[0])
         blue_img = self._normalize_image_url(headshot_imgs[1])
-        
+
         if not red_img or not blue_img:
             self.logger.warning(f"Could not normalize fighter images for bout {bout_id}")
             return
-        
+
         self.logger.info(f"Found fighters for bout {bout_id}")
         self.logger.info(f"   Red: {red_img}")
         self.logger.info(f"   Blue: {blue_img}")
-        
+
         # Actualizar MongoDB
         yield {
             "type": "bout_fighters",
@@ -137,26 +138,26 @@ class UfcImagesSpider(scrapy.Spider):
     def _normalize_image_url(self, raw_url):
         """
         Normalizar URL de imagen a formato proxy
-        
+
         Input: https://images.tapology.com/poster_images/135755/profile/xxx.jpg
         Output: /proxy/tapology/poster_images/135755/profile/xxx.jpg
-        
+
         Input: https://images.tapology.com/letterbox_images/16421/default/image.jpg
         Output: /proxy/tapology/letterbox_images/16421/default/image.jpg
         """
         if not raw_url:
             return None
-        
+
         # Extraer path después de images.tapology.com
         match = re.search(r'images\.tapology\.com(/.*)', raw_url)
         if match:
             path = match.group(1)
             return f"/proxy/tapology{path}"
-        
+
         # Si ya viene como path relativo
         if raw_url.startswith('/'):
             return f"/proxy/tapology{raw_url}"
-        
+
         return None
 
     def handle_error(self, failure):
@@ -174,14 +175,14 @@ class UfcImagesSpider(scrapy.Spider):
 class UfcImagesPipeline:
     """
     Pipeline para actualizar MongoDB con las imágenes extraídas
-    
+
     IMPORTANTE: El pipeline debe estar activado en settings.py:
-    
+
     ITEM_PIPELINES = {
         'tapology_scraper.pipelines.UfcImagesPipeline': 300,
     }
     """
-    
+
     def __init__(self):
         mongo_uri = os.getenv("MONGODB_URI")
 
@@ -192,7 +193,7 @@ class UfcImagesPipeline:
 
     async def process_item(self, item, spider):
         """Procesar cada item y actualizar MongoDB"""
-        
+
         if item.get("type") == "bout_fighters":
             # Actualizar headshots de fighters
             result = await self.db.bouts.update_one(
@@ -204,14 +205,14 @@ class UfcImagesPipeline:
                     }
                 }
             )
-            
+
             if result.modified_count > 0:
                 spider.logger.info(f"Updated bout {item['bout_id']} fighter images")
             elif result.matched_count > 0:
                 spider.logger.info(f"Bout {item['bout_id']} fighter images already up to date")
             else:
                 spider.logger.warning(f"Bout {item['bout_id']} not found while updating fighter images")
-        
+
         return item
 
     def close_spider(self, spider):

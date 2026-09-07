@@ -18,7 +18,6 @@ from tapology_scraper.slot_reconciliation import (
     slot_storage_fingerprint,
 )
 
-
 EVENT_ID = 82001
 T1 = "2026-08-01T12:00:00Z"
 T2 = "2026-08-01T13:00:00Z"

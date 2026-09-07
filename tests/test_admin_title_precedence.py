@@ -118,6 +118,8 @@ def test_a_malformed_sidecar_does_not_crash_ingestion():
 # ---------------------------------------------------------------------------
 
 import copy  # noqa: E402
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 from tapology_scraper.canonical_card_writer import (  # noqa: E402
     InMemoryCanonicalCardStore,
@@ -126,9 +128,6 @@ from tapology_scraper.canonical_card_writer import (  # noqa: E402
 from tapology_scraper.card_observation_sources import (  # noqa: E402
     build_espn_card_observations,
 )
-
-import json  # noqa: E402
-from pathlib import Path  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "espn" / "card_data_v1"
 EVENT_ID = 880101
