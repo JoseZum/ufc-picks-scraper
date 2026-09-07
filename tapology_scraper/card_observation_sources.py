@@ -485,6 +485,20 @@ def _official_event_date(section_starts: Mapping[str, str]) -> str | None:
     return parsed.astimezone(ZoneInfo(EVENT_TIMEZONE)).date().isoformat()
 
 
+def _validate_espn_inputs(
+    espn_event: Any, state: Any, observed_at: str
+) -> str:
+    """Valida los argumentos del builder y normaliza el instante observado."""
+    if not isinstance(espn_event, Mapping):
+        raise ObservationSourceError("espn_event must be a payload mapping.")
+    if not isinstance(state, CanonicalCardState):
+        raise ObservationSourceError("state must be a CanonicalCardState.")
+    normalized = utc_string(observed_at)
+    if normalized is None:
+        raise ObservationSourceError("observed_at must be an ISO-8601 UTC instant.")
+    return normalized
+
+
 def build_espn_card_observations(
     espn_event: Mapping[str, Any],
     state: CanonicalCardState,
@@ -500,13 +514,7 @@ def build_espn_card_observations(
     scoreboard inference exactly as the contract requires.
     """
 
-    if not isinstance(espn_event, Mapping):
-        raise ObservationSourceError("espn_event must be a payload mapping.")
-    if not isinstance(state, CanonicalCardState):
-        raise ObservationSourceError("state must be a CanonicalCardState.")
-    if utc_string(observed_at) is None:
-        raise ObservationSourceError("observed_at must be an ISO-8601 UTC instant.")
-    observed_at = utc_string(observed_at)
+    observed_at = _validate_espn_inputs(espn_event, state, observed_at)
     details = {str(key): _mapping(value) for key, value in _mapping(competition_metadata).items()}
 
     event_id = state.event_id
