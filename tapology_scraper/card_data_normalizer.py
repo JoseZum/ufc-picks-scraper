@@ -1866,6 +1866,158 @@ def _normalize_observations(
     return tuple(sorted(normalized, key=_observation_sort_key))
 
 
+def _derive_event_from_slots(
+    event: dict[str, Any],
+    event_evidence: dict[str, Any],
+    bouts: Mapping[int, Any],
+    slots: Mapping[int, Any],
+    previous_event: Mapping[str, Any],
+    generated_at: str,
+) -> None:
+    """Deriva los campos del evento que salen de sus slots actuales.
+
+    Modifica `event` y `event_evidence` en sitio.
+    """
+    current_slots = [slot for slot in slots.values() if slot.get("is_current") is True]
+    event["main_event_bout_id"] = next(
+        (slot["bout_id"] for slot in current_slots if slot.get("role") == "main_event"),
+        None,
+    )
+    event["listed_bout_count"] = len(current_slots)
+
+    starts = [
+        slot["scheduled_start_time_utc"]
+        for slot in current_slots
+        if _nonempty(slot.get("scheduled_start_time_utc"))
+    ]
+    if starts:
+        event["card_start_time_utc"] = min(starts)
+        event_evidence["card_start_time_utc"] = {
+            "source_kind": "derived",
+            "confidence": "high",
+            "observed_at": generated_at,
+            "source_ref": "CardDataNormalizerV1:current-slot-starts",
+            "reason": "Minimum scheduled start among current canonical slots.",
+        }
+
+    locks = [
+        slot["automatic_lock_time_utc"]
+        for slot in current_slots
+        if _nonempty(slot.get("automatic_lock_time_utc"))
+    ]
+    if locks:
+        event["picks_lock_time_utc"] = min(locks)
+        event_evidence["picks_lock_time_utc"] = {
+            "source_kind": "derived",
+            "confidence": "high",
+            "observed_at": generated_at,
+            "source_ref": "CardDataNormalizerV1:current-slot-locks",
+            "reason": "Minimum automatic lock among current canonical slots.",
+        }
+
+    # El primer resultado final nunca retrocede: se conserva el del snapshot previo.
+    final_times = [
+        bout["result"]["recorded_at"]
+        for bout in bouts.values()
+        if isinstance(bout.get("result"), Mapping)
+        and _nonempty(bout["result"].get("recorded_at"))
+    ]
+    if final_times:
+        previous_first_final = previous_event.get("first_final_result_at")
+        event["first_final_result_at"] = min(
+            [*final_times]
+            + ([previous_first_final] if _nonempty(previous_first_final) else [])
+        )
+    else:
+        event["first_final_result_at"] = None
+
+
+def _detect_changes(
+    previous: Mapping[str, Any] | None,
+    previous_event: Mapping[str, Any],
+    previous_bouts: Mapping[int, Any],
+    previous_slots: Mapping[int, Any],
+    event: Mapping[str, Any],
+    bouts: Mapping[int, Any],
+    slots: Mapping[int, Any],
+    eligibility_probe: Mapping[str, Any],
+    quality: Mapping[str, Any],
+) -> tuple[bool, bool, bool, bool]:
+    """Compara el snapshot previo con el nuevo por cada eje de revision.
+
+    Devuelve (estructura, timing, ciclo de vida, semantica). Sin snapshot
+    previo todo cuenta como cambiado.
+    """
+    previous_structure = (
+        _structure_projection(previous_event, previous_bouts, previous_slots)
+        if previous
+        else None
+    )
+    new_structure = _structure_projection(event, bouts, slots)
+    structure_changed = previous is None or _canonical(previous_structure) != _canonical(
+        new_structure
+    )
+    previous_timing = (
+        _timing_projection(previous_event, previous_slots) if previous else None
+    )
+    timing_changed = previous is None or _canonical(previous_timing) != _canonical(
+        _timing_projection(event, slots)
+    )
+    lifecycle_changed = previous is None or any(
+        previous_event.get(field) != event.get(field)
+        for field in ("status", "first_final_result_at")
+    )
+
+    previous_semantic = (
+        {
+            "event": _semantic_event(previous_event),
+            "bouts": {
+                str(key): _semantic_bout(value)
+                for key, value in sorted(previous_bouts.items())
+            },
+            "slots": {
+                str(key): _semantic_slot(value)
+                for key, value in sorted(previous_slots.items())
+            },
+            "eligibility": {
+                field: copy.deepcopy(previous.get("current_eligibility", {}).get(field))
+                for field in (
+                    "eligible_targets",
+                    "excluded_targets",
+                    "denominator",
+                    "fingerprint",
+                )
+            },
+            "quality": copy.deepcopy(previous.get("quality", {})),
+        }
+        if previous
+        else None
+    )
+    new_semantic = {
+        "event": _semantic_event(event),
+        "bouts": {
+            str(key): _semantic_bout(value) for key, value in sorted(bouts.items())
+        },
+        "slots": {
+            str(key): _semantic_slot(value) for key, value in sorted(slots.items())
+        },
+        "eligibility": {
+            field: copy.deepcopy(eligibility_probe.get(field))
+            for field in (
+                "eligible_targets",
+                "excluded_targets",
+                "denominator",
+                "fingerprint",
+            )
+        },
+        "quality": copy.deepcopy(quality),
+    }
+    semantic_changed = previous is None or _canonical(previous_semantic) != _canonical(
+        new_semantic
+    )
+    return structure_changed, timing_changed, lifecycle_changed, semantic_changed
+
+
 def normalize_card_data_v1(
     observations: Sequence[CardDataObservation | Mapping[str, Any]],
     previous_snapshot: Mapping[str, Any] | None = None,
@@ -2044,54 +2196,9 @@ def normalize_card_data_v1(
     _apply_section_timing(event, slots)
     _normalize_slots(slots, bouts, quarantines)
 
-    current_slots = [slot for slot in slots.values() if slot.get("is_current") is True]
-    event["main_event_bout_id"] = next(
-        (slot["bout_id"] for slot in current_slots if slot.get("role") == "main_event"),
-        None,
+    _derive_event_from_slots(
+        event, event_evidence, bouts, slots, previous_event, generated_at
     )
-    event["listed_bout_count"] = len(current_slots)
-    starts = [
-        slot["scheduled_start_time_utc"]
-        for slot in current_slots
-        if _nonempty(slot.get("scheduled_start_time_utc"))
-    ]
-    locks = [
-        slot["automatic_lock_time_utc"]
-        for slot in current_slots
-        if _nonempty(slot.get("automatic_lock_time_utc"))
-    ]
-    if starts:
-        event["card_start_time_utc"] = min(starts)
-        event_evidence["card_start_time_utc"] = {
-            "source_kind": "derived",
-            "confidence": "high",
-            "observed_at": generated_at,
-            "source_ref": "CardDataNormalizerV1:current-slot-starts",
-            "reason": "Minimum scheduled start among current canonical slots.",
-        }
-    if locks:
-        event["picks_lock_time_utc"] = min(locks)
-        event_evidence["picks_lock_time_utc"] = {
-            "source_kind": "derived",
-            "confidence": "high",
-            "observed_at": generated_at,
-            "source_ref": "CardDataNormalizerV1:current-slot-locks",
-            "reason": "Minimum automatic lock among current canonical slots.",
-        }
-    final_times = [
-        bout["result"]["recorded_at"]
-        for bout in bouts.values()
-        if isinstance(bout.get("result"), Mapping)
-        and _nonempty(bout["result"].get("recorded_at"))
-    ]
-    if final_times:
-        previous_first_final = previous_event.get("first_final_result_at")
-        event["first_final_result_at"] = min(
-            [*final_times]
-            + ([previous_first_final] if _nonempty(previous_first_final) else [])
-        )
-    else:
-        event["first_final_result_at"] = None
 
     previous_snapshot_revision = int(previous.get("snapshot_revision", 0)) if previous else 0
     eligibility_probe = _eligibility_projection(
@@ -2105,72 +2212,21 @@ def normalize_card_data_v1(
     )
     event["mission_eligible_bout_count"] = eligibility_probe["denominator"]
     quality = _quality(event, bouts, slots, eligibility_probe, quarantines)
-    previous_structure = (
-        _structure_projection(previous_event, previous_bouts, previous_slots)
-        if previous
-        else None
-    )
-    new_structure = _structure_projection(event, bouts, slots)
-    structure_changed = previous is None or _canonical(previous_structure) != _canonical(
-        new_structure
-    )
-    previous_timing = (
-        _timing_projection(previous_event, previous_slots) if previous else None
-    )
-    timing_changed = previous is None or _canonical(previous_timing) != _canonical(
-        _timing_projection(event, slots)
-    )
-    lifecycle_changed = previous is None or any(
-        previous_event.get(field) != event.get(field)
-        for field in ("status", "first_final_result_at")
-    )
-
-    previous_semantic = (
-        {
-            "event": _semantic_event(previous_event),
-            "bouts": {
-                str(key): _semantic_bout(value)
-                for key, value in sorted(previous_bouts.items())
-            },
-            "slots": {
-                str(key): _semantic_slot(value)
-                for key, value in sorted(previous_slots.items())
-            },
-            "eligibility": {
-                field: copy.deepcopy(previous.get("current_eligibility", {}).get(field))
-                for field in (
-                    "eligible_targets",
-                    "excluded_targets",
-                    "denominator",
-                    "fingerprint",
-                )
-            },
-            "quality": copy.deepcopy(previous.get("quality", {})),
-        }
-        if previous
-        else None
-    )
-    new_semantic = {
-        "event": _semantic_event(event),
-        "bouts": {
-            str(key): _semantic_bout(value) for key, value in sorted(bouts.items())
-        },
-        "slots": {
-            str(key): _semantic_slot(value) for key, value in sorted(slots.items())
-        },
-        "eligibility": {
-            field: copy.deepcopy(eligibility_probe.get(field))
-            for field in (
-                "eligible_targets",
-                "excluded_targets",
-                "denominator",
-                "fingerprint",
-            )
-        },
-        "quality": copy.deepcopy(quality),
-    }
-    semantic_changed = previous is None or _canonical(previous_semantic) != _canonical(
-        new_semantic
+    (
+        structure_changed,
+        timing_changed,
+        lifecycle_changed,
+        semantic_changed,
+    ) = _detect_changes(
+        previous,
+        previous_event,
+        previous_bouts,
+        previous_slots,
+        event,
+        bouts,
+        slots,
+        eligibility_probe,
+        quality,
     )
     snapshot_revision = (
         1
