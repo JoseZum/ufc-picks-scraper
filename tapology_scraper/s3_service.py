@@ -93,20 +93,7 @@ class S3Service:
         return self.image_source_mode == "cache"
 
     def generate_fighter_image_key(self, fighter_id: str, file_ext: str = "jpg") -> str:
-        """
-        Genera la key S3 para la imagen de un peleador
-
-        Convención de nombres:
-        - fighters/{fighter_id}.jpg
-        - Ejemplo: fighters/123456.jpg
-
-        Args:
-            fighter_id: ID del peleador (puede ser string o int)
-            file_ext: Extensión del archivo (default: jpg)
-
-        Returns:
-            Key S3 en formato: "fighters/{fighter_id}.{ext}"
-        """
+        """Key de la foto de un peleador, tipo `fighters/123456.jpg`."""
         return f"fighters/{fighter_id}.{file_ext}"
 
     async def upload_image(
@@ -116,21 +103,7 @@ class S3Service:
         content_type: str = "image/jpeg",
         metadata: dict | None = None
     ) -> None:
-        """
-        Sube una imagen a S3
-
-        Solo funciona en modo "s3". En modo "cache" lanza error.
-
-        Args:
-            s3_key: Key donde guardar la imagen en S3
-            image_data: Bytes de la imagen
-            content_type: MIME type de la imagen (default: image/jpeg)
-            metadata: Metadata opcional para guardar con la imagen
-
-        Raises:
-            S3WriteNotAllowedError: Si estamos en modo cache (solo lectura)
-            S3NotConfiguredError: Si S3 no está configurado
-        """
+        """Sube una imagen. Falla en modo cache, que es de solo lectura."""
         if self.is_read_only:
             raise S3WriteNotAllowedError(
                 f"No se puede escribir en S3 en modo '{self.image_source_mode}'. "

@@ -1,22 +1,19 @@
-"""Pure late-card change policy over CardData V1 observations.
+"""Política pura de cambios tardíos en la cartelera.
 
-SCR-010 owns the distinction between a transiently incomplete source payload
-and a canonical card change.  It wraps ``CardDataNormalizerV1`` without
-opening a database connection:
+Distingue un payload incompleto pasajero de un cambio real de card, sin tocar
+la base de datos. Las cancelaciones y reemplazos explícitos se aplican al
+momento; un payload que falta una vez solo genera un aviso.
 
-* explicit cancellation/postponement and linked replacement facts apply now;
-* one missing or partial payload only emits operational findings;
-* inferred removal requires three distinct complete ESPN-detail observations
-  spanning at least 30 minutes inside the seven days before card lock;
-* no absence inference runs after lock, after the first final result, or while
-  the event is not scheduled;
-* cancelled/replaced bout IDs are terminal and cannot be silently revived;
-* current eligibility may change, while frozen mission/streak/monthly
-  snapshots are explicitly declared immutable.
+Inferir que una pelea se cayó pide tres observaciones completas de ESPN
+separadas al menos 30 minutos, dentro de los siete días previos al cierre. No
+se infiere nada después del cierre, después del primer resultado final ni si
+el evento no está programado.
 
-The returned presence state is a persistence-neutral value object for a future
-adapter.  This module never writes it, never calls current writers, and never
-physically deletes a bout or slot.
+Los IDs cancelados o reemplazados son terminales y no reviven. La elegibilidad
+actual puede cambiar, pero los snapshots congelados de misión, streak y mensual
+son inmutables.
+
+Devuelve un value object: no escribe, no llama a los writers y no borra nada.
 """
 
 from __future__ import annotations
