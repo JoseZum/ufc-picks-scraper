@@ -1,26 +1,9 @@
-"""
-Spider de Imágenes de Peleadores UFC - Sube directamente a S3
+"""Fotos de peleadores desde Tapology hacia S3.
 
-Este spider se enfoca exclusivamente en descargar y almacenar imágenes de peleadores.
-A diferencia del spider de datos (ufc_fighters.py), este maneja solo imágenes.
+Busca en Mongo los peleadores sin `image_key`, baja la foto en memoria (nunca
+a disco) y sube a `fighters/<id>.<ext>`. En Mongo solo queda la key.
 
-Flujo del spider:
-1. Consulta MongoDB para encontrar peleadores sin imagen (image_key = None)
-2. Visita el perfil de cada peleador en Tapology
-3. Extrae la URL de la imagen del peleador (headshot o profile image)
-4. Descarga la imagen en memoria (NO la guarda en disco local)
-5. Sube directamente a S3 usando el servicio centralizado
-6. Guarda en MongoDB solo el image_key (NO la URL completa)
-
-Naming convention en S3:
-- fighters/{fighter_id}.jpg
-- Ejemplo: fighters/123456.jpg
-
-Usage:
-    scrapy crawl fighter_images                        # Todos los peleadores sin imagen
-    scrapy crawl fighter_images -a EVENT_ID=135755     # Solo un evento específico
-    scrapy crawl fighter_images -a LIMIT=50            # Limitar cantidad
-    scrapy crawl fighter_images -a FIGHTER_ID=123456   # Un peleador específico
+    scrapy crawl fighter_images [-a EVENT_ID=] [-a LIMIT=] [-a FIGHTER_ID=]
 """
 
 import os
@@ -86,15 +69,7 @@ class FighterImagesSpider(scrapy.Spider):
     }
 
     def __init__(self, EVENT_ID=None, LIMIT=None, FIGHTER_ID=None, FORCE=None, *args, **kwargs):
-        """
-        Inicializar spider con parámetros opcionales
-
-        Args:
-            EVENT_ID: Filtrar solo peleadores de un evento específico
-            LIMIT: Limitar cantidad de peleadores a procesar
-            FIGHTER_ID: Procesar solo un peleador específico
-            FORCE: Re-download all images even if they already exist (for quality upgrades)
-        """
+        """FORCE re-descarga aunque ya exista la imagen, para mejorar calidad."""
         super().__init__(*args, **kwargs)
         self.target_event_id = EVENT_ID
         self.target_fighter_id = FIGHTER_ID
@@ -130,16 +105,10 @@ class FighterImagesSpider(scrapy.Spider):
             yield req
 
     async def load_fighters_from_mongo(self):
-        """
-        Cargar peleadores que necesitan imágenes desde MongoDB
+        """Saca de Mongo los peleadores sin foto de las carteleras abiertas.
 
-        Estrategia simple basada en MongoDB (sin S3 HEAD checks):
-        1. Buscar eventos no completados
-        2. Traer bouts donde al menos un fighter no tiene image_key
-        3. Skip si ya tiene image_key (a menos que FORCE=true)
-
-        Yields:
-            scrapy.Request para cada peleador sin imagen
+        Se decide solo con `image_key`, sin consultar S3, para no pagar un HEAD
+        por peleador.
         """
         try:
             # Paso 1: Determinar qué bouts consultar
@@ -245,29 +214,10 @@ class FighterImagesSpider(scrapy.Spider):
             self.logger.error(f"❌ Error cargando fighters de MongoDB: {e}")
 
     def parse_fighter_image(self, response):
-        """
-        Extraer la URL de la imagen del perfil del peleador
+        """Elige la foto del perfil: headshot, luego letterbox, luego cualquiera.
 
-        Tapology muestra imágenes de peleadores en diferentes formatos:
-        - Headshot images: fotos de cara/perfil (preferidas)
-        - Letterbox images: fotos promocionales/artísticas
-        - Profile images: fotos de perfil genéricas
-
-        Estrategia de selección:
-        1. Buscar primero headshot_images (mejor calidad para perfiles)
-        2. Si no hay, buscar letterbox_images
-        3. Si no hay, buscar cualquier imagen de perfil
-
-        ¿Por qué este orden?
-        - headshot_images son consistentes en tamaño y formato
-        - letterbox_images a veces tienen fondos o texto superpuesto
-        - Es mejor tener una imagen consistente que la más "artística"
-
-        Args:
-            response: Scrapy response del perfil del peleador
-
-        Yields:
-            Dict con tapology_id, fighter_name, e image_url para el pipeline
+        Los headshot son homogéneos en tamaño y encuadre; los letterbox traen
+        fondos y texto superpuesto que se ven mal en la card.
         """
         tapology_id = extract_tapology_fighter_id(response.url) or response.meta["tapology_id"]
         source_tapology_id = response.meta.get("source_tapology_id")
@@ -344,21 +294,7 @@ class FighterImagesSpider(scrapy.Spider):
         tapology_url: str | None = None,
         source_tapology_id: str | None = None,
     ) -> dict:
-        """
-        Crear item para procesar en el pipeline
-
-        Normaliza la URL de la imagen y prepara el item con toda la metadata
-        necesaria para el pipeline.
-
-        Args:
-            tapology_id: ID único del peleador en Tapology
-            fighter_name: Nombre del peleador (para logging)
-            image_url: URL de la imagen (puede ser relativa o absoluta)
-            image_type: Tipo de imagen encontrada (headshot/letterbox/profile)
-
-        Returns:
-            Dict con los datos necesarios para el pipeline
-        """
+        """Arma el item del pipeline y pasa la URL a absoluta si venía relativa."""
         # Normalizar URL: convertir a absoluta si es relativa
         if image_url.startswith('//'):
             # URL sin protocolo (ej: //images.tapology.com/...)
@@ -390,15 +326,7 @@ class FighterImagesSpider(scrapy.Spider):
         }
 
     def handle_error(self, failure):
-        """
-        Manejar errores de requests HTTP
-
-        Se ejecuta cuando falla un request (timeout, 404, 500, etc).
-        Loguea el error para debugging pero no frena el spider.
-
-        Args:
-            failure: Scrapy Failure object con información del error
-        """
+        """Un perfil que falla se loguea y se salta: no detiene el spider."""
         request = failure.request
         tapology_id = request.meta.get("tapology_id", "unknown")
         fighter_name = request.meta.get("fighter_name", "unknown")
@@ -419,33 +347,10 @@ class FighterImagesSpider(scrapy.Spider):
 
 
 class FighterImagesPipeline:
-    """
-    Pipeline para descargar imágenes y subirlas a S3
+    """Baja la foto, la sube a S3 y guarda `image_key` en los bouts del peleador.
 
-    Este pipeline procesa cada item generado por el spider:
-    1. Descarga la imagen desde Tapology (en memoria, NO en disco)
-    2. Sube la imagen a S3 usando el servicio centralizado
-    3. Actualiza MongoDB con el image_key (NO la URL)
-
-    ¿Por qué guardar solo image_key y no URL?
-    - Las URLs de CloudFront pueden cambiar (si cambiamos de CDN)
-    - El backend genera la URL completa desde el image_key
-    - Menor acoplamiento entre datos y infraestructura
-
-    Estructura en MongoDB después de este pipeline:
-    {
-        "fighters": {
-            "red": {
-                "tapology_id": "123456",
-                "fighter_name": "John Doe",
-                "image_key": "fighters/123456.jpg",  // ← Lo que guardamos
-                ...
-            }
-        }
-    }
-
-    El backend luego usa image_key para construir:
-    https://d6huioh3922nf.cloudfront.net/fighters/123456.jpg
+    Se guarda la key y no la URL: si cambia el CDN, los documentos no se tocan
+    porque el backend arma la URL a partir de la key.
     """
 
     def __init__(self):
@@ -498,23 +403,7 @@ class FighterImagesPipeline:
             ) from e
 
     async def process_item(self, item, spider):
-        """
-        Procesar cada item: descargar imagen y subir a S3
-
-        Flujo:
-        1. Validar que sea un item de tipo fighter_image
-        2. Descargar la imagen desde Tapology (httpx, en memoria)
-        3. Generar S3 key usando el servicio (fighters/{fighter_id}.jpg)
-        4. Subir a S3 con metadata
-        5. Actualizar MongoDB con el image_key en todos los bouts del fighter
-
-        Args:
-            item: Dict con tapology_id, fighter_name, image_url, etc
-            spider: Referencia al spider (para logging)
-
-        Returns:
-            El mismo item (Scrapy pipeline protocol)
-        """
+        """Descarga, sube a S3 y propaga la key a todos los bouts del peleador."""
         # Validar tipo de item
         if item.get("type") != "fighter_image":
             return item
@@ -623,15 +512,7 @@ class FighterImagesPipeline:
         return item
 
     def _get_extension_from_content_type(self, content_type: str) -> str:
-        """
-        Inferir extensión de archivo desde Content-Type HTTP
-
-        Args:
-            content_type: MIME type (ej: "image/jpeg", "image/png")
-
-        Returns:
-            Extensión sin punto (ej: "jpg", "png")
-        """
+        """Extensión a partir del Content-Type, sin el punto."""
         content_type_lower = content_type.lower()
 
         if "jpeg" in content_type_lower or "jpg" in content_type_lower:
