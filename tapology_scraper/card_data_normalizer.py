@@ -1438,7 +1438,7 @@ def _quality(
     quarantines: Sequence[Quarantine],
 ) -> dict[str, Any]:
     issues = [item.as_quality_issue() for item in quarantines]
-    states = {capability: "ready" for capability in CAPABILITIES}
+    states = dict.fromkeys(CAPABILITIES, "ready")
     for item in quarantines:
         for capability in item.blocks_capabilities:
             states[capability] = "quarantined"
