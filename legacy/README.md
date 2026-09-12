@@ -14,7 +14,7 @@ every file that ever could — deleting them would erase that record.
 | `sync_image_keys.py` | One-off reconciliation of S3 image keys into Mongo, from before the ESPN headshot pipeline set them directly. |
 | `scheduler.py` | The Tapology-era scrape-window loop. GitHub Actions owns scheduling now; no Dockerfile, deployment or workflow referenced it. |
 
-They remain classified in `tapology_scraper/writer_precedence_inventory.py` under
+They remain classified in `tapology_scraper/audits/writer_precedence_inventory.py` under
 their new paths. If one is ever needed again, run it deliberately and by hand —
 none of them is safe to put back on a schedule without re-reviewing what it
 writes.
