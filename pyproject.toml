@@ -2,6 +2,9 @@
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
+# `python -m pytest` mete la raiz en sys.path, `pytest` a secas no. Sin esto
+# los tests solo importan `tapology_scraper` con la primera forma.
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = [
