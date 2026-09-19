@@ -7,6 +7,7 @@ from tapology_scraper.spiders.event_images import (
     clean_event_name,
     event_is_in_image_window,
     event_is_in_season,
+    event_requires_image_coverage,
     extract_credit_url,
     extract_source_image_url,
     extract_ufc_event_date,
@@ -280,6 +281,26 @@ class EventImageResolverTests(unittest.TestCase):
             event_is_in_image_window(
                 event,
                 today=date(2026, 7, 28),
+            )
+        )
+
+    def test_image_coverage_is_required_only_for_nearby_cards(self):
+        self.assertFalse(
+            event_requires_image_coverage(
+                {"date": datetime(2026, 11, 14)},
+                today=date(2026, 9, 19),
+            )
+        )
+        self.assertFalse(
+            event_requires_image_coverage(
+                {"date": datetime(2026, 10, 4)},
+                today=date(2026, 9, 19),
+            )
+        )
+        self.assertTrue(
+            event_requires_image_coverage(
+                {"date": datetime(2026, 10, 3)},
+                today=date(2026, 9, 19),
             )
         )
 

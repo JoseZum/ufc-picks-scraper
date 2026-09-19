@@ -61,6 +61,8 @@ _EXPIRING_IMAGE_HOST_SUFFIXES = (
 )
 _IMAGE_WINDOW_DAYS_BACK = 14
 _IMAGE_WINDOW_DAYS_AHEAD = 75
+# UFC publishes posters after a confirmed main event, so far-future cards are exempt.
+_IMAGE_COVERAGE_DAYS_AHEAD = 14
 _MONTH_NUMBERS = {
     month.lower(): index
     for index, month in enumerate(
@@ -485,6 +487,14 @@ def event_is_in_season(event: dict, season: int) -> bool:
     return bool(date_string and date_string.startswith(f"{season:04d}-"))
 
 
+def event_requires_image_coverage(event: dict, today: date | None = None) -> bool:
+    return event_is_in_image_window(
+        event,
+        today=today,
+        days_ahead=_IMAGE_COVERAGE_DAYS_AHEAD,
+    )
+
+
 def _page_event_name(response) -> str:
     heading = " ".join(response.css("h1 ::text, h1::text").getall())
     matchup = " ".join(
@@ -722,7 +732,8 @@ class EventImagesSpider(scrapy.Spider):
             minimum_score=0.0 if exact_file else 0.62,
         )
         if not candidate:
-            self.logger.warning(
+            log = self.logger.info if poster_is_displayable(event) else self.logger.warning
+            log(
                 "No matching Wikipedia poster found for %s (%s)",
                 event.get("name"),
                 event_id,
@@ -917,8 +928,12 @@ class EventImagesSpider(scrapy.Spider):
                     "poster_image_source": 1,
                     "hero_image_url": 1,
                     "hero_image_source": 1,
+                    "date": 1,
+                    "event_date": 1,
                 },
             ) or {}
+            if not event_requires_image_coverage(event):
+                continue
             if not poster_is_displayable(event):
                 missing_posters.append(event_id)
             if (
