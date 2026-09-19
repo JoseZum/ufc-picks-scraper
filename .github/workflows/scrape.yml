@@ -64,7 +64,7 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl espn -a MODE=results 2>&1 | tee espn-results.log
-          ! grep -Eq "ESPN request failed|Canonical card write failed|spider_exceptions/count" espn-results.log
+          ! grep -Eq "ESPN request failed|Canonical card write failed|Canonical card plan blocked|spider_exceptions/count" espn-results.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
@@ -114,10 +114,11 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl espn -a MODE=general -a DAYS_BACK=14 -a DAYS_AHEAD=60 2>&1 | tee espn-general.log
-          # `plan blocked` se omite a proposito: el ETL revisita cada evento
-          # conforme llegan los detalles y las pasadas intermedias se bloquean
-          # sin que eso sea un fallo. `write failed` es la no-convergencia real.
-          ! grep -Eq "ESPN request failed|Canonical card write failed|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-general.log
+          # `plan blocked` si es un fallo: un plan bloqueado corta el ETL del
+          # evento antes de persistir evidencia de ausencia, asi que la politica
+          # SCR-010 deja de contar y una pelea caida se queda en la card para
+          # siempre. UFC 331 corrio 40 dias en verde con el plan bloqueado.
+          ! grep -Eq "ESPN request failed|Canonical card write failed|Canonical card plan blocked|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-general.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -147,7 +148,7 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl espn -a MODE=general -a DAYS_BACK=1 -a DAYS_AHEAD=8 2>&1 | tee espn-upcoming.log
-          ! grep -Eq "ESPN request failed|Canonical card write failed|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-upcoming.log
+          ! grep -Eq "ESPN request failed|Canonical card write failed|Canonical card plan blocked|Failed ESPN headshot|headshots failed|spider_exceptions/count" espn-upcoming.log
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
