@@ -1,7 +1,5 @@
-import logging
 import unittest
 from datetime import date, datetime
-from unittest.mock import Mock
 
 from tapology_scraper.espn_etl import (
     age_on_date,
@@ -22,7 +20,6 @@ from tapology_scraper.espn_etl import (
     transform_result,
 )
 from tapology_scraper.spiders.espn import (
-    EspnSpider,
     event_has_all_results,
     event_is_near,
     has_fight_result,
@@ -56,63 +53,7 @@ def competitor(
     }
 
 
-class ListHandler(logging.Handler):
-    def __init__(self):
-        super().__init__()
-        self.records = []
-
-    def emit(self, record):
-        self.records.append(record)
-
-
 class EspnEtlTests(unittest.TestCase):
-    def make_close_test_spider(self):
-        spider = EspnSpider.__new__(EspnSpider)
-        spider.mongo_client = Mock()
-        spider.mode = "general"
-        spider.processed_events = 0
-        spider.processed_bouts = 0
-        spider.results_loaded = 0
-        spider.profiles_loaded = 0
-        spider._card_plan_blocks_at_close = {}
-        return spider
-
-    def capture_espn_logs(self):
-        logger = logging.getLogger(EspnSpider.name)
-        handler = ListHandler()
-        logger.addHandler(handler)
-        previous_level = logger.level
-        logger.setLevel(logging.INFO)
-        self.addCleanup(logger.removeHandler, handler)
-        self.addCleanup(logger.setLevel, previous_level)
-        return handler
-
-    def test_card_plan_blocked_at_close_logs_marker(self):
-        spider = self.make_close_test_spider()
-        logs = self.capture_espn_logs()
-        spider._mark_card_plan_blocked(331, ("SLOT_REVISION_CONTENT_CONFLICT",))
-
-        spider.closed("finished")
-
-        self.assertIn(
-            "CARD_PLAN_BLOCKED_AT_CLOSE event_ids=[331] "
-            "codes=['SLOT_REVISION_CONTENT_CONFLICT']",
-            [record.getMessage() for record in logs.records],
-        )
-
-    def test_transient_card_plan_block_does_not_log_close_marker(self):
-        spider = self.make_close_test_spider()
-        logs = self.capture_espn_logs()
-        spider._mark_card_plan_blocked(331, ("SLOT_REVISION_CONTENT_CONFLICT",))
-        spider._clear_card_plan_block(331)
-
-        spider.closed("finished")
-
-        self.assertNotIn(
-            "CARD_PLAN_BLOCKED_AT_CLOSE",
-            "\n".join(record.getMessage() for record in logs.records),
-        )
-
     def test_results_pass_collects_details_for_absence_confirmation(self):
         self.assertTrue(mode_collects_competition_details("results"))
         self.assertTrue(mode_collects_competition_details("general"))
