@@ -243,6 +243,7 @@ class EspnSpider(scrapy.Spider):
         self._espn_cards: dict[int, dict] = {}
         self.card_writes_applied = 0
         self.card_writes_blocked = 0
+        self._card_plan_blocks_at_close: dict[int, tuple[str, ...]] = {}
 
     async def start(self):
         reconciled = self._reconcile_fully_resulted_events()
@@ -366,6 +367,7 @@ class EspnSpider(scrapy.Spider):
             )
         except ObservationSourceError as error:
             self.card_writes_blocked += 1
+            self._mark_card_plan_blocked(event_id, ("OBSERVATION_SOURCE_ERROR",))
             self.logger.error(
                 "ESPN observations rejected for event %s: %s", event_id, error
             )
@@ -382,6 +384,11 @@ class EspnSpider(scrapy.Spider):
             )
         if batch.blocked or not batch.observations:
             self.card_writes_blocked += int(batch.blocked)
+            if batch.blocked:
+                self._mark_card_plan_blocked(
+                    event_id,
+                    tuple(item.code for item in batch.findings),
+                )
             return
         # Standing Admin decisions are replayed on every pass. Without this an
         # `admin_override` only lasts until the next reconciliation, because the
@@ -414,18 +421,24 @@ class EspnSpider(scrapy.Spider):
             )
         except CanonicalCardWriteError as error:
             self.card_writes_blocked += 1
+            self._mark_card_plan_blocked(event_id, ("CANONICAL_CARD_WRITE_ERROR",))
             self.logger.error(
                 "Canonical card write failed for event %s: %s", event_id, error
             )
             return
         if plan.blocked:
             self.card_writes_blocked += 1
+            self._mark_card_plan_blocked(
+                event_id,
+                tuple(item.code for item in plan.findings),
+            )
             self.logger.error(
                 "Canonical card plan blocked for event %s: %s",
                 event_id,
                 [item.code for item in plan.findings],
             )
             return
+        self._clear_card_plan_block(event_id)
         if receipt.applied:
             self.card_writes_applied += 1
             self._assign_points_for_new_results(plan)
@@ -442,6 +455,14 @@ class EspnSpider(scrapy.Spider):
                         stored,
                         event_id,
                     )
+
+    def _mark_card_plan_blocked(self, event_id: int, codes: tuple[str, ...]) -> None:
+        self._card_plan_blocks_at_close[int(event_id)] = tuple(
+            code for code in codes if code
+        )
+
+    def _clear_card_plan_block(self, event_id: int) -> None:
+        self._card_plan_blocks_at_close.pop(int(event_id), None)
 
     def _build_coverage(self, event_id: int, cached: dict, batch):
         """Declare what this ESPN payload contained, for the absence policy.
@@ -1171,6 +1192,20 @@ class EspnSpider(scrapy.Spider):
             self.logger.error("ESPN request failed: %s", failure.request.url)
 
     def closed(self, reason):
+        if self._card_plan_blocks_at_close:
+            event_ids = sorted(self._card_plan_blocks_at_close)
+            codes = sorted(
+                {
+                    code
+                    for event_id in event_ids
+                    for code in self._card_plan_blocks_at_close[event_id]
+                }
+            )
+            self.logger.error(
+                "CARD_PLAN_BLOCKED_AT_CLOSE event_ids=%s codes=%s",
+                event_ids,
+                codes,
+            )
         self.logger.info(
             "ESPN ETL finished: mode=%s events=%s bouts=%s results=%s profiles=%s",
             self.mode,
