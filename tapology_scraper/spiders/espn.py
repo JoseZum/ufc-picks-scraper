@@ -45,6 +45,7 @@ from tapology_scraper.espn_etl import (
     find_bout_match,
     find_event_match,
     map_competitors_to_corners,
+    result_detail_texts,
     safe_external_http_url,
     transform_athlete_profile,
     transform_athlete_records,
@@ -788,6 +789,22 @@ class EspnSpider(scrapy.Spider):
                     competition_id,
                     int(bout["id"]),
                 )
+                if (
+                    ((competition.get("status") or {}).get("type") or {}).get("completed")
+                    and not result_detail_texts([
+                        str((detail.get("type") or {}).get("text") or "")
+                        for detail in competition.get("details") or []
+                    ])
+                ):
+                    url = ESPN_COMPETITION_URL.format(
+                        event_id=espn_event["id"], competition_id=competition_id
+                    )
+                    yield scrapy.Request(
+                        f"{url}/status?lang=en&region=us",
+                        callback=self.parse_competition_result,
+                        errback=self.log_request_error,
+                        cb_kwargs={"bout_id": int(bout["id"])},
+                    )
 
     def _link_competitors(
         self,
@@ -960,7 +977,7 @@ class EspnSpider(scrapy.Spider):
         cache = self._espn_cards.get(event_id)
         if not cache or not competition_id:
             return
-        cache["details"][competition_id] = {
+        cache["details"].setdefault(competition_id, {}).update({
             key: value
             for key, value in (
                 ("card_section", metadata.get("card_section")),
@@ -972,8 +989,20 @@ class EspnSpider(scrapy.Spider):
                 ),
             )
             if value is not None
-        }
+        })
         self._submit_card_observations(int(event_id))
+
+    def parse_competition_result(self, response, bout_id: int):
+        bout = self.db.bouts.find_one(
+            {"id": bout_id}, {"event_id": 1, "espn_competition_id": 1}
+        ) or {}
+        cache = self._espn_cards.get(bout.get("event_id"))
+        method = (response.json().get("result") or {}).get("displayName")
+        if cache and bout.get("espn_competition_id") and method:
+            cache["details"].setdefault(str(bout["espn_competition_id"]), {})[
+                "result_method"
+            ] = method
+            self._submit_card_observations(int(bout["event_id"]))
 
     def parse_athlete(self, response, athlete_id: str):
         profile = transform_athlete_profile(response.json())

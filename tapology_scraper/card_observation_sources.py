@@ -418,6 +418,7 @@ def _ending_seconds(display_clock: Any) -> int | None:
 def _espn_result_values(
     competition: Mapping[str, Any],
     fighters: Sequence[Mapping[str, Any]],
+    result_method: str | None = None,
 ) -> dict[str, Any] | None:
     status = _mapping(competition.get("status"))
     if not _mapping(status.get("type")).get("completed"):
@@ -429,6 +430,12 @@ def _espn_result_values(
     ]
     detail_texts = result_detail_texts(detail_texts)
     method, _ = normalize_result_method(detail_texts)
+    if method == "OTHER" and not detail_texts and result_method:
+        method = "NC" if result_method.lower() == "no contest" else {
+            "ko_tko": "KO/TKO", "submission": "SUB", "decision": "DEC", "dq": "DQ"
+        }.get(_method_family([result_method]), "OTHER")
+        if method != "OTHER":
+            detail_texts = [result_method]
     if method == "OTHER":
         return None
     winner_corner = None
@@ -747,7 +754,7 @@ def build_espn_card_observations(
                 )
             )
 
-        result_values = _espn_result_values(competition, fighters)
+        result_values = _espn_result_values(competition, fighters, detail.get("result_method"))
         if result_values is not None:
             observations.append(
                 _observation(
