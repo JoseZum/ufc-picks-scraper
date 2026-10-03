@@ -1137,6 +1137,47 @@ class TestConvergence:
         assert plan.operation_count > 0
         assert plan.converged is False
 
+    def test_detail_confirming_a_summary_only_slot_is_not_a_conflict(self):
+        """UFC 332: a bout first written from the scoreboard alone.
+
+        When its competition detail arrives it re-confirms the same values with
+        `espn_detail` evidence.  That upgrade is no semantic change, so the
+        snapshot revision stays put, and the slot reconciler used to refuse it
+        as REVISION_CONTENT_CONFLICT: the whole card stayed blocked, results
+        included, until some unrelated real change bumped the revision.
+        """
+
+        store = new_store()
+        espn_pass(store, "numbered_three_sections.json", observed_at=T1)
+        payload = espn_event("numbered_three_sections.json")
+        competition_id = str(payload["competitions"][0]["id"])
+        bout = next(
+            item for item in store.bouts.values()
+            if str(item.get("espn_competition_id")) == competition_id
+        )
+        slot = next(
+            item for item in store.slots.values() if item["bout_id"] == bout["id"]
+        )
+
+        batch = build_espn_card_observations(
+            payload,
+            store.load_card(EVENT_ID),
+            observed_at=T2,
+            competition_metadata={
+                competition_id: {"card_section": slot["card_section"]}
+            },
+        )
+        plan, receipt = submit_card_observations(
+            store, EVENT_ID, batch.observations, dry_run=False
+        )
+
+        assert not plan.blocked, [item.code for item in plan.findings]
+        assert receipt.verified_converged is True
+        stored = next(
+            item for item in store.slots.values() if item["bout_id"] == bout["id"]
+        )
+        assert stored["evidence"]["card_section"]["source_kind"] == "espn_detail"
+
     def test_stabilization_keeps_a_strictly_higher_authority(self):
         """Re-confirmation is not news; an authority upgrade is."""
 

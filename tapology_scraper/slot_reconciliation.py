@@ -596,9 +596,14 @@ def plan_slot_reconciliation(
         if not changed:
             unchanged.append(expected_slot_id)
             continue
+        # An evidence-only difference is a provenance upgrade (summary ->
+        # detail confirming the same values): the writer's stabilization drops
+        # plain re-confirmations, and no revision bumps for it.  Refusing it
+        # blocked the whole card until an unrelated change came along.
         if (
             current.get("canonical_slot_version") == SLOT_STORAGE_VERSION
             and current_snapshot_revision == snapshot_revision
+            and not set(changed) <= {"evidence", "reconciliation_fingerprint"}
         ):
             conflicts.append(
                 SlotConflict(
