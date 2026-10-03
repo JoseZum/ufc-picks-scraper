@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime
+from unittest.mock import Mock
 
 from tapology_scraper.espn_etl import (
     age_on_date,
@@ -20,6 +21,7 @@ from tapology_scraper.espn_etl import (
     transform_result,
 )
 from tapology_scraper.spiders.espn import (
+    EspnSpider,
     event_has_all_results,
     event_is_near,
     has_fight_result,
@@ -54,6 +56,24 @@ def competitor(
 
 
 class EspnEtlTests(unittest.TestCase):
+    def test_close_replans_every_card_and_flags_the_stuck_ones(self):
+        spider = EspnSpider.__new__(EspnSpider)
+        spider.mongo_client = Mock()
+        spider.mode = "results"
+        spider.processed_events = spider.processed_bouts = 0
+        spider.results_loaded = spider.profiles_loaded = 0
+        spider._espn_cards = {332: {}, 331: {}}
+        spider._submit_card_observations = Mock(side_effect=lambda event_id: event_id != 332)
+
+        with self.assertLogs("espn", level="ERROR") as logs:
+            spider.closed("finished")
+
+        self.assertEqual(
+            [call.args[0] for call in spider._submit_card_observations.call_args_list],
+            [331, 332],
+        )
+        self.assertIn("CARD_PLAN_BLOCKED_AT_CLOSE event_ids=[332]", logs.output[0])
+
     def test_results_pass_collects_details_for_absence_confirmation(self):
         self.assertTrue(mode_collects_competition_details("results"))
         self.assertTrue(mode_collects_competition_details("general"))

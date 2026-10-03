@@ -351,12 +351,15 @@ class EspnSpider(scrapy.Spider):
             pending += 1
         return pending
 
-    def _submit_card_observations(self, event_id: int) -> None:
-        """Route the cached ESPN payload through the canonical boundary."""
+    def _submit_card_observations(self, event_id: int) -> bool:
+        """Route the cached ESPN payload through the canonical boundary.
+
+        Returns False when the card could not be written: blocked or failed.
+        """
 
         cached = self._espn_cards.get(event_id)
         if not cached or not cached.get("payload"):
-            return
+            return True
         state = self.card_store.load_card(event_id)
         try:
             batch = build_espn_card_observations(
@@ -370,7 +373,7 @@ class EspnSpider(scrapy.Spider):
             self.logger.error(
                 "ESPN observations rejected for event %s: %s", event_id, error
             )
-            return
+            return False
         for finding in batch.findings:
             self.logger.log(
                 40 if finding.severity in {"blocking", "error"} else 20,
@@ -383,7 +386,7 @@ class EspnSpider(scrapy.Spider):
             )
         if batch.blocked or not batch.observations:
             self.card_writes_blocked += int(batch.blocked)
-            return
+            return not batch.blocked
         # Standing Admin decisions are replayed on every pass. Without this an
         # `admin_override` only lasts until the next reconciliation, because the
         # normalizer rebuilds the snapshot from observations alone (D-DATA-010).
@@ -418,7 +421,7 @@ class EspnSpider(scrapy.Spider):
             self.logger.error(
                 "Canonical card write failed for event %s: %s", event_id, error
             )
-            return
+            return False
         if plan.blocked:
             self.card_writes_blocked += 1
             self.logger.error(
@@ -426,7 +429,7 @@ class EspnSpider(scrapy.Spider):
                 event_id,
                 [item.code for item in plan.findings],
             )
-            return
+            return False
         if receipt.applied:
             self.card_writes_applied += 1
             self._assign_points_for_new_results(plan)
@@ -443,6 +446,7 @@ class EspnSpider(scrapy.Spider):
                         stored,
                         event_id,
                     )
+        return True
 
     def _build_coverage(self, event_id: int, cached: dict, batch):
         """Declare what this ESPN payload contained, for the absence policy.
@@ -1200,6 +1204,18 @@ class EspnSpider(scrapy.Spider):
             self.logger.error("ESPN request failed: %s", failure.request.url)
 
     def closed(self, reason):
+        # Intermediate passes may block while details arrive, so the run's
+        # history proves nothing. One more pass against the stored state does:
+        # it lands whatever a racing pass left behind, and a card still blocked
+        # here is stuck for real (UFC 332 hid three new bouts for 17 days
+        # behind a green pipeline). The workflow greps the marker.
+        stuck = [
+            event_id
+            for event_id in sorted(self._espn_cards)
+            if not self._submit_card_observations(event_id)
+        ]
+        if stuck:
+            self.logger.error("CARD_PLAN_BLOCKED_AT_CLOSE event_ids=%s", stuck)
         self.logger.info(
             "ESPN ETL finished: mode=%s events=%s bouts=%s results=%s profiles=%s",
             self.mode,
