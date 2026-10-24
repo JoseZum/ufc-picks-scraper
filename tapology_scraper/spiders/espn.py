@@ -427,7 +427,7 @@ class EspnSpider(scrapy.Spider):
             self.logger.error(
                 "Canonical card plan blocked for event %s: %s",
                 event_id,
-                [item.code for item in plan.findings],
+                [f"{item.code}: {item.message}" for item in plan.findings],
             )
             return False
         if receipt.applied:
@@ -485,7 +485,11 @@ class EspnSpider(scrapy.Spider):
             if "result" not in write.changed_fields:
                 continue
             result = write.values.get("result")
-            if isinstance(result, dict) and result.get("winner_name"):
+            # Un empate o NC no tiene winner_name, pero sus picks igual se
+            # cierran en 0/incorrecto (calculate_pick_points, como el backend).
+            if isinstance(result, dict) and (
+                result.get("winner_name") or result.get("outcome") in {"draw", "nc"}
+            ):
                 self.results_loaded += 1
                 self._assign_points(int(write.bout_id), result)
 

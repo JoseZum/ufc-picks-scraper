@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from tapology_scraper.espn_etl import (
@@ -73,6 +74,51 @@ class EspnEtlTests(unittest.TestCase):
             [331, 332],
         )
         self.assertIn("CARD_PLAN_BLOCKED_AT_CLOSE event_ids=[332]", logs.output[0])
+
+    def test_draw_and_no_contest_results_close_their_picks_at_zero(self):
+        for outcome in ("draw", "nc"):
+            with self.subTest(outcome=outcome):
+                spider = EspnSpider.__new__(EspnSpider)
+                spider.results_loaded = 0
+                spider.db = Mock()
+                spider.db.picks.find.return_value = [
+                    {"_id": 1, "user_id": 7, "picked_fighter_name": "Melissa Gatto"}
+                ]
+                plan = SimpleNamespace(
+                    bout_writes=[
+                        SimpleNamespace(
+                            bout_id=401924511,
+                            changed_fields={"result"},
+                            values={"result": {"winner_name": None, "outcome": outcome}},
+                        )
+                    ]
+                )
+
+                spider._assign_points_for_new_results(plan)
+
+                spider.db.picks.update_one.assert_called_once_with(
+                    {"_id": 1}, {"$set": {"points_awarded": 0, "is_correct": False}}
+                )
+                self.assertEqual(spider.results_loaded, 1)
+
+    def test_result_without_winner_or_draw_outcome_scores_nothing(self):
+        spider = EspnSpider.__new__(EspnSpider)
+        spider.results_loaded = 0
+        spider.db = Mock()
+        plan = SimpleNamespace(
+            bout_writes=[
+                SimpleNamespace(
+                    bout_id=1,
+                    changed_fields={"result"},
+                    values={"result": {"winner_name": None, "outcome": "red"}},
+                )
+            ]
+        )
+
+        spider._assign_points_for_new_results(plan)
+
+        spider.db.picks.find.assert_not_called()
+        self.assertEqual(spider.results_loaded, 0)
 
     def test_results_pass_collects_details_for_absence_confirmation(self):
         self.assertTrue(mode_collects_competition_details("results"))

@@ -431,9 +431,11 @@ def _espn_result_values(
     detail_texts = result_detail_texts(detail_texts)
     method, _ = normalize_result_method(detail_texts)
     if method == "OTHER" and not detail_texts and result_method:
-        method = "NC" if result_method.lower() == "no contest" else {
-            "ko_tko": "KO/TKO", "submission": "SUB", "decision": "DEC", "dq": "DQ"
-        }.get(_method_family([result_method]), "OTHER")
+        method, _ = normalize_result_method([result_method])
+        if method == "OTHER":
+            method = {
+                "ko_tko": "KO/TKO", "submission": "SUB", "decision": "DEC", "dq": "DQ"
+            }.get(_method_family([result_method]), "OTHER")
         if method != "OTHER":
             detail_texts = [result_method]
     if method == "OTHER":
@@ -450,8 +452,12 @@ def _espn_result_values(
         outcome = "blue_win"
     elif method == "NC":
         outcome = "no_contest"
-    else:
+    elif any("draw" in text.lower() for text in detail_texts):
         outcome = "draw"
+    else:
+        # Un método decisivo sin bandera de ganador es ESPN a medio publicar,
+        # no un empate: esperar a que llegue el ganador en vez de inventarlo.
+        return None
     winner_id = next(
         (
             fighter.get("fighter_id")
