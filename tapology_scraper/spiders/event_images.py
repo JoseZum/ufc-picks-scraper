@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from html import unescape
-from urllib.parse import urlencode, urlparse
+from urllib.parse import unquote, urlencode, urlparse
 
 import requests
 import scrapy
@@ -51,6 +51,12 @@ _INSTAGRAM_SOURCE_HOST_SUFFIXES = (
     "instagram.com",
 )
 _WIKIPEDIA_POSTER_SOURCES = {"wikipedia_source", "wikipedia_file"}
+_WIKIPEDIA_POSTER_FIELDS = (
+    "wikipedia_article_url",
+    "wikipedia_file_url",
+    "wikipedia_image_url",
+    "poster_source_page_url",
+)
 _DISPLAYABLE_POSTER_SOURCES = {
     *_WIKIPEDIA_POSTER_SOURCES,
     "ufc_official_fallback",
@@ -109,11 +115,45 @@ def _normalized_words(value: str | None) -> list[str]:
     return re.findall(r"[a-z0-9]+", value)
 
 
+def _matchup_sides(words: list[str]) -> tuple[set[str], set[str]] | None:
+    """Split "... A vs B" into its two sides, ignoring generic/numeric words."""
+    if "vs" not in words:
+        return None
+    index = words.index("vs")
+    sides = tuple(
+        {
+            word
+            for word in part
+            if word not in _GENERIC_EVENT_WORDS and not word.isdigit()
+        }
+        for part in (words[:index], words[index + 1 :])
+    )
+    return sides if all(sides) else None
+
+
+def matchups_conflict(event_name: str, title: str) -> bool:
+    """True when both names announce a matchup and it is not the same one.
+
+    Sharing a single fighter is not a match: "Allen vs. Duncan" scored 0.66
+    against the 2023 article "Allen vs. Craig" and kept its poster for weeks.
+    Titles without a matchup (``UFC 324``, ``UFC Fight Night 232.jpg``) never
+    conflict, so they keep going through the fuzzy score.
+    """
+    event_sides = _matchup_sides(_normalized_words(clean_event_name(event_name)))
+    title_sides = _matchup_sides(_normalized_words(title))
+    if not event_sides or not title_sides:
+        return False
+    (event_a, event_b), (title_a, title_b) = event_sides, title_sides
+    same = event_a & title_a and event_b & title_b
+    swapped = event_a & title_b and event_b & title_a
+    return not (same or swapped)
+
+
 def wikipedia_candidate_score(event_name: str, file_title: str) -> float:
     """Score a Wikipedia file title while strongly weighting matchup names."""
     event_words = _normalized_words(clean_event_name(event_name))
     title_words = _normalized_words(file_title)
-    if "ufc" not in title_words:
+    if "ufc" not in title_words or matchups_conflict(event_name, file_title):
         return 0.0
 
     event_normalized = " ".join(event_words)
@@ -251,9 +291,25 @@ def poster_is_displayable(event: dict) -> bool:
     )
 
 
+def poster_matches_other_event(event: dict) -> bool:
+    """True when the stored Wikipedia poster was resolved for another matchup."""
+    if event.get("poster_image_source") not in _WIKIPEDIA_POSTER_SOURCES:
+        return False
+    return any(
+        matchups_conflict(
+            event.get("name") or "",
+            unquote(urlparse(url).path.rsplit("/", 1)[-1]).replace("_", " "),
+        )
+        for url in (event.get("wikipedia_article_url"), event.get("wikipedia_file_url"))
+        if isinstance(url, str) and url
+    )
+
+
 def poster_needs_wikipedia_refresh(event: dict) -> bool:
     """Refresh missing/fallback posters and signed social-CDN source URLs."""
     if event.get("poster_image_source") not in _WIKIPEDIA_POSTER_SOURCES:
+        return True
+    if poster_matches_other_event(event):
         return True
     host = (
         urlparse(str(event.get("poster_image_url") or "")).hostname or ""
@@ -577,6 +633,8 @@ class EventImagesSpider(scrapy.Spider):
             "status": 1,
             "poster_image_url": 1,
             "poster_image_source": 1,
+            "wikipedia_article_url": 1,
+            "wikipedia_file_url": 1,
             "hero_image_url": 1,
             "hero_image_source": 1,
         }
@@ -620,7 +678,10 @@ class EventImagesSpider(scrapy.Spider):
             elif (
                 event.get("hero_image_url")
                 and event.get("hero_image_source") == "ufc_official_xl_2x"
-                and not poster_is_displayable(event)
+                and (
+                    not poster_is_displayable(event)
+                    or poster_matches_other_event(event)
+                )
             ):
                 self._save_official_poster_fallback(event_id, event["hero_image_url"])
 
@@ -838,7 +899,11 @@ class EventImagesSpider(scrapy.Spider):
     def _save_official_poster_fallback(self, event_id: int, hero_url: str):
         """Keep cards visible until Wikipedia publishes a usable event poster."""
         event = self.events[event_id]
-        if event.get("poster_image_source") in _WIKIPEDIA_POSTER_SOURCES:
+        replacing_wrong_poster = poster_matches_other_event(event)
+        if (
+            event.get("poster_image_source") in _WIKIPEDIA_POSTER_SOURCES
+            and not replacing_wrong_poster
+        ):
             return
 
         fields = {
@@ -846,8 +911,14 @@ class EventImagesSpider(scrapy.Spider):
             "poster_image_source": "ufc_official_fallback",
             "poster_image_updated_at": datetime.utcnow(),
         }
-        self.db.events.update_one({"id": event_id}, {"$set": fields})
+        update: dict = {"$set": fields}
+        if replacing_wrong_poster:
+            update["$unset"] = dict.fromkeys(_WIKIPEDIA_POSTER_FIELDS, "")
+        self.db.events.update_one({"id": event_id}, update)
         event.update(fields)
+        if replacing_wrong_poster:
+            for field in _WIKIPEDIA_POSTER_FIELDS:
+                event.pop(field, None)
         self.logger.info(
             "Using official UFC hero as temporary card poster for event %s",
             event_id,

@@ -1,9 +1,11 @@
 import unittest
 from datetime import date, datetime
+from unittest.mock import Mock
 
 from scrapy.http import HtmlResponse, Request
 
 from tapology_scraper.spiders.event_images import (
+    EventImagesSpider,
     clean_event_name,
     event_is_in_image_window,
     event_is_in_season,
@@ -16,7 +18,9 @@ from tapology_scraper.spiders.event_images import (
     instagram_embed_url,
     is_supported_source_page,
     is_x_media_url,
+    matchups_conflict,
     poster_is_displayable,
+    poster_matches_other_event,
     poster_needs_wikipedia_refresh,
     select_wikipedia_article,
     select_wikipedia_candidate,
@@ -117,6 +121,105 @@ class EventImageResolverTests(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result["file_title"], "File:UFC Fight Night 283.jpg")
+
+    def test_sharing_one_fighter_is_not_the_same_matchup(self):
+        name = "UFC Fight Night: Allen vs. Duncan"
+
+        self.assertTrue(matchups_conflict(name, "UFC Fight Night: Allen vs. Craig"))
+        self.assertTrue(matchups_conflict(name, "File:UFC Fight Night Moicano vs Duncan.jpg"))
+        self.assertFalse(matchups_conflict(name, "UFC Fight Night: Allen vs. Duncan"))
+        self.assertFalse(matchups_conflict(name, "UFC Fight Night: Duncan vs. Allen"))
+        self.assertFalse(
+            matchups_conflict(
+                "UFC Fight Night: Prochazka vs. Stirling",
+                "UFC Fight Night: Procházka vs. Stirling",
+            )
+        )
+        # Sin enfrentamiento en el titulo no hay conflicto: sigue el score difuso.
+        self.assertFalse(matchups_conflict("UFC 324: Gaethje vs. Pimblett", "UFC 324"))
+        self.assertFalse(matchups_conflict(name, "File:UFC Fight Night 232.jpg"))
+
+    def test_article_for_another_matchup_is_rejected(self):
+        payload = {
+            "query": {
+                "pages": {
+                    "1": {
+                        "title": "UFC Fight Night: Allen vs. Craig",
+                        "fullurl": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Allen_vs._Craig",
+                        "images": [{"title": "File:UFC Fight Night 232.jpg"}],
+                    }
+                }
+            }
+        }
+
+        self.assertIsNone(
+            select_wikipedia_article(payload, "UFC Fight Night: Allen vs. Duncan")
+        )
+        self.assertIsNotNone(
+            select_wikipedia_article(payload, "UFC Fight Night: Allen vs. Craig")
+        )
+
+    def test_stored_poster_from_another_matchup_is_refreshed(self):
+        event = {
+            "name": "UFC Fight Night: Allen vs. Duncan",
+            "poster_image_source": "wikipedia_file",
+            "poster_image_url": "https://upload.wikimedia.org/wikipedia/en/0/04/UFC_Fight_Night_232.jpg",
+            "wikipedia_article_url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Allen_vs._Craig",
+            "wikipedia_file_url": "https://en.wikipedia.org/wiki/File:UFC_Fight_Night_232.jpg",
+        }
+        self.assertTrue(poster_matches_other_event(event))
+        self.assertTrue(poster_needs_wikipedia_refresh(event))
+
+        event["wikipedia_article_url"] = (
+            "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Allen_vs._Duncan"
+        )
+        self.assertFalse(poster_matches_other_event(event))
+        self.assertFalse(poster_needs_wikipedia_refresh(event))
+
+    def test_official_hero_replaces_a_poster_from_another_matchup(self):
+        spider = EventImagesSpider.__new__(EventImagesSpider)
+        spider.db = Mock()
+        event = {
+            "id": 600061541,
+            "name": "UFC Fight Night: Allen vs. Duncan",
+            "poster_image_source": "wikipedia_file",
+            "poster_image_url": "https://upload.wikimedia.org/UFC_Fight_Night_232.jpg",
+            "wikipedia_article_url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Allen_vs._Craig",
+            "poster_source_page_url": "https://www.tapology.com/fightcenter/events/101867",
+        }
+        spider.events = {600061541: event}
+
+        spider._save_official_poster_fallback(600061541, "https://ufc.com/hero.jpg")
+
+        (_, update), _ = spider.db.events.update_one.call_args
+        self.assertEqual(update["$set"]["poster_image_source"], "ufc_official_fallback")
+        self.assertEqual(update["$set"]["poster_image_url"], "https://ufc.com/hero.jpg")
+        self.assertEqual(
+            set(update["$unset"]),
+            {
+                "wikipedia_article_url",
+                "wikipedia_file_url",
+                "wikipedia_image_url",
+                "poster_source_page_url",
+            },
+        )
+        self.assertNotIn("wikipedia_article_url", event)
+
+    def test_official_hero_never_replaces_a_matching_wikipedia_poster(self):
+        spider = EventImagesSpider.__new__(EventImagesSpider)
+        spider.db = Mock()
+        spider.events = {
+            1: {
+                "id": 1,
+                "name": "UFC Fight Night: Allen vs. Duncan",
+                "poster_image_source": "wikipedia_file",
+                "wikipedia_article_url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Allen_vs._Duncan",
+            }
+        }
+
+        spider._save_official_poster_fallback(1, "https://ufc.com/hero.jpg")
+
+        spider.db.events.update_one.assert_not_called()
 
     def test_extract_credit_url_ignores_wikipedia_links(self):
         value = (
